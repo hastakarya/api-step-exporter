@@ -266,6 +266,21 @@
     padding: 20px;
     text-align: center;
   }
+  #empty.capturing {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .spinner {
+    width: 13px;
+    height: 13px;
+    border: 2px solid var(--border);
+    border-top-color: var(--text-muted);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
   #detailPanel {
     display: flex;
     flex-direction: column;

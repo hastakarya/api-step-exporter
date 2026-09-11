@@ -365,16 +365,27 @@ function captureStep() {
   });
 }
 
+function showCaptureAllProgress(done, total) {
+  stepsEl.innerHTML =
+    '<div id="empty" class="capturing">' +
+    '<span class="spinner"></span>Capturing ' + done + ' of ' + total + '…' +
+    '</div>';
+}
+
 function captureAll() {
   const entries = getFilteredRequests();
   if (entries.length === 0) return;
   captureAllBtn.disabled = true;
   captureBtn.disabled = true;
+  showCaptureAllProgress(0, entries.length);
   let chain = Promise.resolve();
-  entries.forEach((entry) => {
+  entries.forEach((entry, i) => {
     // Entries without an auto-shot need a live captureVisibleTab call,
     // which Chrome throttles — space those out same as queueAutoShot.
-    chain = chain.then(() => captureEntry(entry)).then(() => new Promise((r) => setTimeout(r, 120)));
+    chain = chain
+      .then(() => captureEntry(entry))
+      .then(() => showCaptureAllProgress(i + 1, entries.length))
+      .then(() => new Promise((r) => setTimeout(r, 120)));
   });
   chain.then(() => {
     captureAllBtn.disabled = false;
