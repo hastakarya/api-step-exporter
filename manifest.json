@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "API Step Exporter",
+  "version": "1.0.0",
+  "description": "Pick API requests in DevTools Network tab, capture a screenshot per step, export as Markdown (curl or URL format).",
+  "author": "HK Nurul Adi Septian",
+  "devtools_page": "devtools.html",
+  "permissions": ["tabs"],
+  "host_permissions": ["<all_urls>"],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

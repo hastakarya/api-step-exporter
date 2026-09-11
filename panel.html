@@ -1,0 +1,462 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-alt: #f5f7fa;
+    --bg-row-hover: #f0f2f3;
+    --bg-row-selected: #e6f2ff;
+    --border: #d0d7de;
+    --border-soft: #e1e4e8;
+    --text: #1f2328;
+    --text-muted: #6c757d;
+    --text-dim: #8a9199;
+    --accent: #24292f;
+    --error: #b42318;
+    --json-key: #1f2328;
+    --json-string: #0a7d3f;
+    --json-number: #0550ae;
+    --json-boolean: #036a75;
+    --json-null: #6c757d;
+  }
+  [data-theme="dark"] {
+    --bg: #202124;
+    --bg-alt: #26272b;
+    --bg-row-hover: #2d2e32;
+    --bg-row-selected: #223449;
+    --border: #3c4043;
+    --border-soft: #33353a;
+    --text: #e8eaed;
+    --text-muted: #9aa0a6;
+    --text-dim: #7a7f85;
+    --accent: #e8eaed;
+    --error: #f28b82;
+    --json-key: #e8eaed;
+    --json-string: #7ee787;
+    --json-number: #79c0ff;
+    --json-boolean: #56d4dd;
+    --json-null: #9aa0a6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 11px -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    height: 100vh;
+  }
+  #left, #right {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+  #left {
+    width: 42%;
+    border-right: 1px solid var(--border-soft);
+  }
+  #right {
+    width: 58%;
+  }
+  #toolbar {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border-soft);
+    background: var(--bg-alt);
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  #search {
+    flex: 1;
+    padding: 4px 6px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: var(--bg);
+    color: var(--text);
+  }
+  #typeFilter {
+    padding: 4px 6px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: var(--bg);
+    color: var(--text);
+    font: 11px -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+  #themeToggle {
+    font-size: 14px;
+    line-height: 1;
+    padding: 4px 7px;
+  }
+  .btn-danger {
+    color: var(--error);
+    border-color: var(--error);
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 7px;
+  }
+  .btn-danger:hover { background: var(--error); color: var(--bg); }
+  #table-head {
+    display: flex;
+    font: 10px -apple-system, Segoe UI, Roboto, sans-serif;
+    color: var(--text-muted);
+    background: var(--bg-alt);
+    border-bottom: 1px solid var(--border-soft);
+    padding: 4px 8px;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+  }
+  #table-head .col-name { flex: 1; }
+  #table-head .col-status { width: 46px; }
+  #table-head .col-type { width: 70px; }
+  #reqlist {
+    flex: 1;
+    overflow-y: auto;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+  }
+  .req-item {
+    display: flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--border-soft);
+    cursor: pointer;
+  }
+  .req-item:hover { background: var(--bg-row-hover); }
+  .req-item.selected { background: var(--bg-row-selected); }
+  .req-item .col-name {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .req-item .col-name .method {
+    display: inline-block;
+    min-width: 52px;
+    color: var(--text-muted);
+    margin-right: 8px;
+    padding-right: 8px;
+    border-right: 1px solid var(--border-soft);
+  }
+  .req-item .col-status { width: 46px; }
+  .req-item .col-type {
+    width: 70px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .status-ok { color: var(--text); }
+  .status-err { color: var(--error); font-weight: 600; }
+  #panel-toolbar {
+    padding: 8px;
+    border-bottom: 1px solid var(--border-soft);
+    background: var(--bg-alt);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  button {
+    padding: 5px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--text);
+    cursor: pointer;
+  }
+  button:hover { background: var(--bg-row-hover); }
+  button.primary {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+  .export-wrap { position: relative; }
+  .export-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 10;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, .15);
+    min-width: 170px;
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .export-menu-group {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--text-muted);
+    padding: 4px 6px 2px;
+  }
+  .export-menu button {
+    border: none;
+    text-align: left;
+    background: transparent;
+    padding: 6px 8px;
+    border-radius: 3px;
+  }
+  .export-menu button:hover { background: var(--bg-row-hover); }
+  .export-menu[hidden] { display: none; }
+  .icon-btn { display: inline-flex; align-items: center; gap: 6px; }
+  #steps {
+    flex: 1;
+    overflow-y: auto;
+  }
+  #step-table-head {
+    display: flex;
+    align-items: center;
+    font: 10px -apple-system, Segoe UI, Roboto, sans-serif;
+    color: var(--text-muted);
+    background: var(--bg-alt);
+    border-bottom: 1px solid var(--border-soft);
+    padding: 6px 8px;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    position: sticky;
+    top: 0;
+  }
+  .step-row {
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border-soft);
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+  }
+  .step-row:hover { background: var(--bg-row-hover); }
+  .step-row { gap: 12px; }
+  .col-thumb { width: 96px; flex: none; }
+  .col-thumb img {
+    width: 96px;
+    height: 68px;
+    object-fit: cover;
+    object-position: top;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    display: block;
+  }
+  .col-method { width: 90px; flex: none; display: flex; flex-direction: column; gap: 2px; }
+  .col-apiname {
+    width: 140px;
+    flex: none;
+    padding: 0 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .col-apiurl {
+    flex: 1;
+    min-width: 0;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .col-action { width: 32px; flex: none; text-align: right; }
+  .step-remove { padding: 4px 6px; }
+  #empty {
+    color: var(--text-muted);
+    padding: 20px;
+    text-align: center;
+  }
+  #detailPanel {
+    display: flex;
+    flex-direction: column;
+    flex: none;
+    border-top: 1px solid var(--border-soft);
+    background: var(--bg);
+  }
+  #detailPanel[hidden] { display: none; }
+  #detailResizer {
+    height: 6px;
+    flex: none;
+    cursor: row-resize;
+    background: var(--bg-alt);
+  }
+  #detailResizer:hover { background: var(--border); }
+  #detailHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border-soft);
+    background: var(--bg-alt);
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+    flex: none;
+  }
+  #detailTitle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #detailClose {
+    padding: 2px 7px;
+    flex: none;
+    margin-left: 8px;
+  }
+  #detailBody {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+  }
+  #detailBody .hd-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--text-muted);
+    margin: 6px 0 2px;
+  }
+  #detailBody .hd-label:first-child { margin-top: 0; }
+  #detailBody pre {
+    margin: 0;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 10px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--text);
+  }
+  #detailBody .hd-loading {
+    color: var(--text-muted);
+    font-size: 11px;
+  }
+  .json-root, .json-node {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+  }
+  .json-row { display: block; }
+  .json-children {
+    margin-left: 13px;
+    padding-left: 7px;
+    border-left: 1px dotted var(--border);
+  }
+  .json-toggle {
+    display: inline-block;
+    width: 10px;
+    cursor: pointer;
+    user-select: none;
+    color: var(--text-dim);
+    transition: transform .1s;
+  }
+  .json-node.collapsed > .json-toggle { transform: rotate(-90deg); }
+  .json-node.collapsed > .json-children { display: none; }
+  .json-count {
+    display: none;
+    color: var(--text-dim);
+    margin: 0 4px;
+    font-style: italic;
+  }
+  .json-node.collapsed > .json-count { display: inline; }
+  .json-key { color: var(--json-key); font-weight: 600; }
+  .json-string { color: var(--json-string); }
+  .json-number { color: var(--json-number); }
+  .json-boolean { color: var(--json-boolean); }
+  .json-null { color: var(--json-null); font-style: italic; }
+  .json-punct { color: var(--text-dim); }
+  label { display: flex; align-items: center; gap: 4px; }
+</style>
+</head>
+<body>
+  <div id="left">
+    <div id="toolbar">
+      <input id="search" type="text" placeholder="Filter by URL...">
+      <select id="typeFilter">
+        <option value="all">All</option>
+        <option value="fetchxhr">Fetch/XHR</option>
+        <option value="doc">Doc</option>
+        <option value="css">CSS</option>
+        <option value="js">JS</option>
+        <option value="font">Font</option>
+        <option value="img">Img</option>
+        <option value="media">Media</option>
+        <option value="manifest">Manifest</option>
+        <option value="socket">Socket</option>
+        <option value="wasm">Wasm</option>
+        <option value="other">Other</option>
+      </select>
+      <button id="themeToggle" title="Toggle theme">◐</button>
+      <button id="clearListBtn" class="btn-danger" title="Clear captured request list">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
+          <line x1="10" y1="11" x2="10" y2="17"></line>
+          <line x1="14" y1="11" x2="14" y2="17"></line>
+        </svg>
+      </button>
+    </div>
+    <div id="table-head">
+      <div class="col-name">Name</div>
+      <div class="col-status">Status</div>
+      <div class="col-type">Type</div>
+    </div>
+    <div id="reqlist"></div>
+    <div id="detailPanel" hidden>
+      <div id="detailResizer"></div>
+      <div id="detailHeader">
+        <span id="detailTitle"></span>
+        <button id="detailClose" title="Close">✕</button>
+      </div>
+      <div id="detailBody"></div>
+    </div>
+  </div>
+  <div id="right">
+    <div id="panel-toolbar">
+      <button id="captureBtn" class="primary icon-btn" disabled>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+          <circle cx="12" cy="13" r="4"></circle>
+        </svg>
+        <span>Capture Step</span>
+      </button>
+      <button id="captureAllBtn" class="icon-btn" title="Capture every request matching the current search/type filter">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+          <polyline points="2 17 12 22 22 17"></polyline>
+          <polyline points="2 12 12 17 22 12"></polyline>
+        </svg>
+        <span>Capture All (filtered)</span>
+      </button>
+      <div class="export-wrap">
+        <button id="exportMenuBtn" class="icon-btn" disabled>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span>Export ▾</span>
+        </button>
+        <div id="exportMenu" class="export-menu" hidden>
+          <div class="export-menu-group">curl format</div>
+          <button data-format="curl" data-ext="md">Markdown</button>
+          <button data-format="curl" data-ext="html">HTML</button>
+          <div class="export-menu-group">url / status format</div>
+          <button data-format="url" data-ext="md">Markdown</button>
+          <button data-format="url" data-ext="html">HTML</button>
+        </div>
+      </div>
+      <label title="Include the step screenshot images in the export">
+        <input type="checkbox" id="includeImagesChk" checked>
+        Include images
+      </label>
+      <button id="clearBtn" class="icon-btn" disabled>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
+          <line x1="10" y1="11" x2="10" y2="17"></line>
+          <line x1="14" y1="11" x2="14" y2="17"></line>
+        </svg>
+        <span>Clear Steps</span>
+      </button>
+    </div>
+    <div id="steps"><div id="empty">No steps yet. Select a request on the left, then click "Capture Step".</div></div>
+  </div>
+  <script src="panel.js"></script>
+</body>
+</html>
