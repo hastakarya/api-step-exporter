@@ -55,10 +55,20 @@
   }
   #left {
     width: 42%;
+    flex: none;
+  }
+  #mainResizer {
+    width: 6px;
+    flex: none;
+    cursor: col-resize;
+    background: var(--bg-alt);
+    border-left: 1px solid var(--border-soft);
     border-right: 1px solid var(--border-soft);
   }
+  #mainResizer:hover { background: var(--border); }
   #right {
-    width: 58%;
+    flex: 1;
+    min-width: 0;
   }
   #toolbar {
     padding: 6px 8px;
@@ -542,6 +552,7 @@
       <div id="detailBody"></div>
     </div>
   </div>
+  <div id="mainResizer"></div>
   <div id="right">
     <div id="panel-toolbar">
       <button id="captureBtn" class="primary icon-btn" disabled>

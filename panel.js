@@ -388,6 +388,34 @@ document.addEventListener('mouseup', () => {
   }
 });
 
+// Drag the vertical bar left/right to resize the request list vs. the
+// steps panel, same drag interaction as the detail panel's own resizer.
+const mainResizer = document.getElementById('mainResizer');
+const leftPanel = document.getElementById('left');
+let hResizing = false;
+let hResizeStartX = 0;
+let hResizeStartWidth = 0;
+
+mainResizer.addEventListener('mousedown', (e) => {
+  hResizing = true;
+  hResizeStartX = e.clientX;
+  hResizeStartWidth = leftPanel.getBoundingClientRect().width;
+  document.body.style.userSelect = 'none';
+});
+document.addEventListener('mousemove', (e) => {
+  if (!hResizing) return;
+  const delta = e.clientX - hResizeStartX;
+  const maxWidth = document.body.getBoundingClientRect().width - 260;
+  const newWidth = Math.max(220, Math.min(hResizeStartWidth + delta, maxWidth));
+  leftPanel.style.width = newWidth + 'px';
+});
+document.addEventListener('mouseup', () => {
+  if (hResizing) {
+    hResizing = false;
+    document.body.style.userSelect = '';
+  }
+});
+
 function escapeHtml(s) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -744,23 +772,39 @@ function copyBtn(text) {
   return '<button class="copy-btn" data-clip="' + encodeURIComponent(text) + '">' + COPY_ICON + '<span class="copy-label">Copy</span></button>';
 }
 
+function copyImgBtn(imgId) {
+  return '<button class="copy-btn" data-img-target="' + imgId + '">' + COPY_ICON + '<span class="copy-label">Copy image</span></button>';
+}
+
 const COPY_STYLE =
   '.copy-btn{display:inline-flex;align-items:center;gap:4px;font:11px -apple-system,sans-serif;' +
   'border:1px solid #d0d7de;border-radius:4px;background:#f5f7fa;color:#1f2328;padding:2px 8px;cursor:pointer;}' +
   '.copy-btn:hover{background:#e1e4e8;}.copy-btn.copied{background:#dafbe1;border-color:#1a7f37;color:#1a7f37;}';
 
 // Delegated on document so it works regardless of where this script tag
-// ends up relative to the buttons in the page.
+// ends up relative to the buttons in the page. Handles both text copies
+// (data-clip, url-encoded) and image copies (data-img-target, an <img> id —
+// writes the actual image via ClipboardItem, not just its data-URL string).
 const COPY_JS =
   'document.addEventListener("click", function(e){\n' +
   '  var b = e.target.closest && e.target.closest(".copy-btn");\n' +
   '  if (!b) return;\n' +
-  '  var text = decodeURIComponent(b.dataset.clip);\n' +
   '  var label = b.querySelector(".copy-label");\n' +
-  '  navigator.clipboard.writeText(text).then(function(){\n' +
-  '    var old = label.textContent; label.textContent = "Copied"; b.classList.add("copied");\n' +
+  '  var old = label.textContent;\n' +
+  '  function done(){\n' +
+  '    label.textContent = "Copied"; b.classList.add("copied");\n' +
   '    setTimeout(function(){ label.textContent = old; b.classList.remove("copied"); }, 1200);\n' +
-  '  });\n' +
+  '  }\n' +
+  '  if (b.dataset.imgTarget) {\n' +
+  '    var img = document.getElementById(b.dataset.imgTarget);\n' +
+  '    fetch(img.src).then(function(r){ return r.blob(); }).then(function(blob){\n' +
+  '      var item = {}; item[blob.type] = blob;\n' +
+  '      return navigator.clipboard.write([new ClipboardItem(item)]);\n' +
+  '    }).then(done);\n' +
+  '  } else {\n' +
+  '    var text = decodeURIComponent(b.dataset.clip);\n' +
+  '    navigator.clipboard.writeText(text).then(done);\n' +
+  '  }\n' +
   '});';
 
 function buildCurlBlockHtml(step) {
@@ -797,7 +841,12 @@ function exportHtml(format) {
   steps.forEach((step, idx) => {
     body += '<h2>Step ' + (idx + 1) + '</h2>\n';
     if (includeImages && step.screenshot) {
-      body += '<p style="text-align:center"><img src="' + step.screenshot + '" width="200" alt="Step ' + (idx + 1) + '"></p>\n';
+      const imgId = 'step-img-' + idx;
+      body +=
+        '<p style="text-align:center">' +
+        '<img id="' + imgId + '" src="' + step.screenshot + '" width="200" alt="Step ' + (idx + 1) + '"><br>' +
+        copyImgBtn(imgId) +
+        '</p>\n';
     }
     body += format === 'curl' ? buildCurlBlockHtml(step) : buildUrlBlockHtml(step);
     body += '\n<hr>\n';
