@@ -8,21 +8,31 @@ like at that step, side by side.
 ## Features
 
 - **DevTools panel** ("API Exporter" tab) lists network requests like the
-  native Network panel, with a Fetch/XHR/Doc/CSS/JS/... type filter and URL
-  search.
+  native Network panel — Name / Status / Type columns, a Fetch/XHR/Doc/CSS/
+  JS/Font/Img/Media/Manifest/Socket/Wasm/Other type filter, URL search, and a
+  one-click **clear list** button.
 - **Auto screenshot capture** — for Fetch/XHR requests, a screenshot is taken
   automatically the moment the request finishes, so it reflects the page at
   that exact moment instead of whenever you later select the row.
 - **Capture Step** / **Capture All (filtered)** — add one request or every
-  currently filtered request to your step list in one go.
-- **Click-to-inspect detail panel** — click any request to open a resizable,
-  closable panel with a collapsible, color-coded JSON tree for payload and
-  response (à la DevTools' own object viewer).
-- **Binary-safe** — file uploads and other binary bodies are detected and
-  replaced with a short placeholder instead of dumping unreadable bytes.
-- **Export** — curl-style or plain url/status format, each as Markdown or a
-  standalone HTML file (the HTML export includes working copy buttons; most
-  Markdown viewers strip embedded `<script>`, so `.md` stays plain).
+  currently filtered request to your step list in one go, with a live
+  "Capturing N of M…" progress indicator for batches.
+- **Click-to-inspect detail panel** — click any request in the list to open a
+  resizable, closable panel (drag its top edge, like DevTools' own split
+  panes) with a collapsible, color-coded JSON tree for payload and response.
+- **Step table** — each captured step shows its thumbnail, method + status,
+  API name, and URL. Per step: a 👁 button opens a modal with the full-size
+  screenshot plus the same JSON tree for payload/response (each in its own
+  scroll box, so a long response doesn't push the image off-screen), a ✎
+  button lets you swap the screenshot for your own image, and 🗑 removes it.
+- **Binary-safe** — file uploads and other binary bodies are detected (by
+  non-printable character ratio) and replaced with a short placeholder
+  instead of dumping unreadable bytes.
+- **Export** — a single Export ▾ menu: pick curl-style or plain url/status
+  format, each as Markdown or a standalone HTML file (the HTML export
+  includes working copy buttons; most Markdown viewers strip embedded
+  `<script>`, so `.md` stays plain). An "Include images" checkbox controls
+  whether screenshots are embedded at all.
 - **Light/dark theme**, follows DevTools' own theme with a manual override.
 
 ## Install (unpacked)
@@ -79,7 +89,9 @@ self-distributed).
 2. Click a request in the list (or use **Capture All (filtered)** to grab
    everything matching the current search/type filter)
 3. Click **Capture Step** to add it to your export
-4. Pick a format from **Export ▾** — curl or url/status, Markdown or HTML
+4. In the step table: 👁 to review a step in full, ✎ to swap its screenshot,
+   🗑 to remove it
+5. Pick a format from **Export ▾** — curl or url/status, Markdown or HTML
 
 ## License
 
