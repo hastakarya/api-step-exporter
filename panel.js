@@ -425,6 +425,25 @@ const DETAIL_ICON =
   '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>' +
   '<circle cx="12" cy="12" r="3"></circle></svg>';
 
+const EDIT_ICON =
+  '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+  '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>';
+
+const replaceImageInput = document.getElementById('replaceImageInput');
+let replaceImageTargetIdx = -1;
+
+replaceImageInput.addEventListener('change', () => {
+  const file = replaceImageInput.files[0];
+  replaceImageInput.value = '';
+  if (!file || replaceImageTargetIdx < 0) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    steps[replaceImageTargetIdx].screenshot = reader.result;
+    renderSteps();
+  };
+  reader.readAsDataURL(file);
+});
+
 function renderSteps() {
   exportMenuBtn.disabled = steps.length === 0;
   clearBtn.disabled = steps.length === 0;
@@ -447,7 +466,10 @@ function renderSteps() {
     row.className = 'step-row';
     const statusClass = step.status >= 400 ? 'status-err' : 'status-ok';
     row.innerHTML =
-      '<div class="col-thumb">' + (step.screenshot ? '<img src="' + step.screenshot + '">' : '') + '</div>' +
+      '<div class="col-thumb">' +
+      '<button class="thumb-edit" title="Replace image">' + EDIT_ICON + '</button>' +
+      (step.screenshot ? '<img src="' + step.screenshot + '">' : '') +
+      '</div>' +
       '<div class="col-method"><span class="method">' + step.method + '</span><span class="' + statusClass + '">' + step.status + '</span></div>' +
       '<div class="col-apiname">' + escapeHtml(shortName(step.url)) + '</div>' +
       '<div class="col-apiurl" title="' + escapeHtml(step.url) + '">' + escapeHtml(step.url) + '</div>' +
@@ -455,6 +477,10 @@ function renderSteps() {
       '<button class="step-detail" title="View details">' + DETAIL_ICON + '</button>' +
       '<button class="btn-danger step-remove" data-idx="' + idx + '" title="Remove step">' + TRASH_ICON + '</button>' +
       '</div>';
+    row.querySelector('.thumb-edit').addEventListener('click', () => {
+      replaceImageTargetIdx = idx;
+      replaceImageInput.click();
+    });
     row.querySelector('.step-detail').addEventListener('click', () => openStepModal(step));
     row.querySelector('.step-remove').addEventListener('click', (e) => {
       steps.splice(Number(e.currentTarget.dataset.idx), 1);

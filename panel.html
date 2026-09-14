@@ -232,7 +232,7 @@
   }
   .step-row:hover { background: var(--bg-row-hover); }
   .step-row { gap: 12px; }
-  .col-thumb { width: 140px; flex: none; }
+  .col-thumb { width: 140px; flex: none; position: relative; }
   .col-thumb img {
     width: 140px;
     height: 96px;
@@ -242,6 +242,17 @@
     border-radius: 4px;
     display: block;
   }
+  .thumb-edit {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    z-index: 1;
+    padding: 3px 5px;
+    background: rgba(0, 0, 0, .55);
+    border: 1px solid rgba(255, 255, 255, .3);
+    color: #fff;
+  }
+  .thumb-edit:hover { background: rgba(0, 0, 0, .75); }
   .col-method { width: 90px; flex: none; display: flex; flex-direction: column; gap: 2px; }
   .col-apiname {
     width: 140px;
@@ -543,6 +554,7 @@
       </button>
     </div>
     <div id="steps"><div id="empty">No steps yet. Select a request on the left, then click "Capture Step".</div></div>
+    <input type="file" id="replaceImageInput" accept="image/*" hidden>
   </div>
   <div id="stepModal" hidden>
     <div class="step-modal-card">
