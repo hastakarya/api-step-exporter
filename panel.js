@@ -400,6 +400,11 @@ const TRASH_ICON =
   '<path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>' +
   '<line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>';
 
+const DETAIL_ICON =
+  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+  '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>' +
+  '<circle cx="12" cy="12" r="3"></circle></svg>';
+
 function renderSteps() {
   exportMenuBtn.disabled = steps.length === 0;
   clearBtn.disabled = steps.length === 0;
@@ -426,13 +431,55 @@ function renderSteps() {
       '<div class="col-method"><span class="method">' + step.method + '</span><span class="' + statusClass + '">' + step.status + '</span></div>' +
       '<div class="col-apiname">' + escapeHtml(shortName(step.url)) + '</div>' +
       '<div class="col-apiurl" title="' + escapeHtml(step.url) + '">' + escapeHtml(step.url) + '</div>' +
-      '<div class="col-action"><button class="btn-danger step-remove" data-idx="' + idx + '" title="Remove step">' + TRASH_ICON + '</button></div>';
+      '<div class="col-action">' +
+      '<button class="step-detail" title="View details">' + DETAIL_ICON + '</button>' +
+      '<button class="btn-danger step-remove" data-idx="' + idx + '" title="Remove step">' + TRASH_ICON + '</button>' +
+      '</div>';
+    row.querySelector('.step-detail').addEventListener('click', () => openStepModal(step));
     row.querySelector('.step-remove').addEventListener('click', (e) => {
       steps.splice(Number(e.currentTarget.dataset.idx), 1);
       renderSteps();
     });
     stepsEl.appendChild(row);
   });
+}
+
+const stepModal = document.getElementById('stepModal');
+const stepModalTitle = document.getElementById('stepModalTitle');
+const stepModalBody = document.getElementById('stepModalBody');
+const stepModalClose = document.getElementById('stepModalClose');
+
+stepModalClose.addEventListener('click', () => {
+  stepModal.hidden = true;
+});
+stepModal.addEventListener('click', (e) => {
+  if (e.target === stepModal) stepModal.hidden = true;
+});
+stepModalBody.addEventListener('click', (e) => {
+  const toggle = e.target.closest('.json-toggle');
+  if (!toggle) return;
+  toggle.parentElement.classList.toggle('collapsed');
+});
+
+// Mirrors rawPayloadFromEntry(), but reads off an already-captured step
+// (raw text stored at capture time) instead of a live HAR entry.
+function rawPayloadFromStep(step) {
+  if (step.queryString && step.queryString.length) {
+    const obj = {};
+    step.queryString.forEach((q) => { obj[q.name] = q.value; });
+    return JSON.stringify(obj);
+  }
+  return step.postData || null;
+}
+
+function openStepModal(step) {
+  stepModal.hidden = false;
+  stepModalTitle.textContent = step.method + ' ' + step.status + ' — ' + shortName(step.url);
+  stepModalBody.innerHTML =
+    (step.screenshot ? '<img src="' + step.screenshot + '">' : '') +
+    '<div class="hd-label">URL</div><pre>' + escapeHtml(step.url) + '</pre>' +
+    '<div class="hd-label">Payload</div><div class="step-modal-scroll">' + renderBodyBlock(rawPayloadFromStep(step)) + '</div>' +
+    '<div class="hd-label">Response</div><div class="step-modal-scroll">' + renderBodyBlock(step.responseBody) + '</div>';
 }
 
 function buildPayload(step) {

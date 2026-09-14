@@ -232,10 +232,10 @@
   }
   .step-row:hover { background: var(--bg-row-hover); }
   .step-row { gap: 12px; }
-  .col-thumb { width: 96px; flex: none; }
+  .col-thumb { width: 140px; flex: none; }
   .col-thumb img {
-    width: 96px;
-    height: 68px;
+    width: 140px;
+    height: 96px;
     object-fit: cover;
     object-position: top;
     border: 1px solid var(--border);
@@ -259,8 +259,8 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .col-action { width: 32px; flex: none; text-align: right; }
-  .step-remove { padding: 4px 6px; }
+  .col-action { width: 68px; flex: none; display: flex; gap: 6px; justify-content: flex-end; }
+  .step-detail, .step-remove { padding: 4px 6px; }
   #empty {
     color: var(--text-muted);
     padding: 20px;
@@ -345,8 +345,9 @@
   .json-root, .json-node {
     font-family: "SF Mono", Menlo, Consolas, monospace;
     font-size: 11px;
+    overflow-wrap: anywhere;
   }
-  .json-row { display: block; }
+  .json-row { display: block; word-break: break-all; }
   .json-children {
     margin-left: 13px;
     padding-left: 7px;
@@ -375,6 +376,77 @@
   .json-boolean { color: var(--json-boolean); }
   .json-null { color: var(--json-null); font-style: italic; }
   .json-punct { color: var(--text-dim); }
+  #stepModal {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(0, 0, 0, .5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #stepModal[hidden] { display: none; }
+  .step-modal-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    width: min(640px, 92vw);
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, .35);
+  }
+  .step-modal-header {
+    position: sticky;
+    top: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: var(--bg-alt);
+    border-bottom: 1px solid var(--border-soft);
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+  }
+  #stepModalTitle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-right: 8px;
+  }
+  #stepModalClose { flex: none; padding: 2px 7px; }
+  .step-modal-body { padding: 12px; }
+  .step-modal-body img {
+    display: block;
+    max-width: 100%;
+    margin: 0 auto 14px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  .step-modal-body .hd-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--text-muted);
+    margin: 10px 0 3px;
+  }
+  .step-modal-body .hd-label:first-of-type { margin-top: 0; }
+  .step-modal-body pre {
+    margin: 0;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 10px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: var(--text);
+  }
+  .step-modal-scroll {
+    max-height: 200px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    border: 1px solid var(--border-soft);
+    border-radius: 4px;
+    padding: 6px 8px;
+    background: var(--bg-alt);
+  }
   label { display: flex; align-items: center; gap: 4px; }
 </style>
 </head>
@@ -471,6 +543,15 @@
       </button>
     </div>
     <div id="steps"><div id="empty">No steps yet. Select a request on the left, then click "Capture Step".</div></div>
+  </div>
+  <div id="stepModal" hidden>
+    <div class="step-modal-card">
+      <div class="step-modal-header">
+        <span id="stepModalTitle"></span>
+        <button id="stepModalClose" title="Close">✕</button>
+      </div>
+      <div id="stepModalBody" class="step-modal-body"></div>
+    </div>
   </div>
   <script src="panel.js"></script>
 </body>
