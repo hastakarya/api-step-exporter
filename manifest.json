@@ -5,6 +5,10 @@
   "description": "Pick API requests in DevTools Network tab, capture a screenshot per step, export as Markdown (curl or URL format).",
   "author": "HK Nurul Adi Septian",
   "devtools_page": "devtools.html",
+  "background": {
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
+  },
   "permissions": ["tabs"],
   "host_permissions": ["<all_urls>"],
   "icons": {

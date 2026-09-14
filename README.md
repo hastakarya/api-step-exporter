@@ -28,9 +28,10 @@ like at that step, side by side.
 ## Install (unpacked)
 
 Built on Manifest V3 + the `chrome.devtools.*` APIs, so it loads the same way
-on any Chromium-based browser. Firefox and Safari are not supported — their
-extension/DevTools APIs differ enough that this would need a real port, not
-just repackaging.
+on any Chromium-based browser, and also runs on Firefox — its DevTools panel
+document doesn't expose `browser.tabs` directly, so screenshot capture is
+relayed through `background.js` there instead. Safari is not supported —
+its extension platform requires a real Xcode-based port.
 
 ### Chrome
 
@@ -59,6 +60,18 @@ just repackaging.
 2. Enable **Developer mode** (top right)
 3. Click **Load unpacked**, select this folder
 4. Open DevTools on any page — a new **API Exporter** tab appears
+
+### Firefox
+
+1. Open `about:debugging#/runtime/this-firefox`
+2. Click **Load Temporary Add-on…**
+3. Select `manifest.json` inside this folder (the file, not the folder)
+4. Open DevTools (F12) on any page — a new **API Exporter** tab appears
+
+This load is temporary — it's removed when Firefox restarts, so you'll
+repeat these steps each session. A permanent install requires the extension
+to be signed by Mozilla (submitted via addons.mozilla.org, listed or
+self-distributed).
 
 ## Usage
 

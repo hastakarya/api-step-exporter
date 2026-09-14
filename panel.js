@@ -17,6 +17,32 @@ const themeToggle = document.getElementById('themeToggle');
 
 initTheme();
 
+const isFirefox = typeof browser !== 'undefined';
+const devtoolsNS = isFirefox ? browser : chrome;
+
+// Firefox's DevTools panel documents get a more restricted API surface
+// than Chrome's: browser.tabs is entirely undefined there (verified —
+// calling it throws "browser.tabs is undefined"), even though the same
+// extension's background script has full access. So on Firefox we relay
+// the capture through background.js via messaging instead of calling
+// tabs.* directly; on Chrome the panel already has full chrome.tabs access.
+function captureScreenshotCompat() {
+  const tabId = devtoolsNS.devtools.inspectedWindow.tabId;
+  if (isFirefox) {
+    return browser.runtime.sendMessage({ type: 'CAPTURE_TAB', tabId }).then(
+      (res) => (res && res.ok ? res.shot : null),
+      () => null
+    );
+  }
+  return new Promise((resolve) => {
+    chrome.tabs.get(tabId, (tab) => {
+      chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' }, (shot) => {
+        resolve(chrome.runtime.lastError ? null : shot);
+      });
+    });
+  });
+}
+
 let captureQueue = Promise.resolve();
 
 chrome.devtools.network.onRequestFinished.addListener((entry) => {
@@ -25,16 +51,12 @@ chrome.devtools.network.onRequestFinished.addListener((entry) => {
   renderRequestList();
 });
 
-// Chrome throttles captureVisibleTab (~2/sec per window), so auto-shots
-// for API calls are serialized with a short gap between them.
+// Chrome (and Firefox) throttle captureVisibleTab (~2/sec per window), so
+// auto-shots for API calls are serialized with a short gap between them.
 function queueAutoShot(entry) {
-  captureQueue = captureQueue.then(() => new Promise((resolve) => {
-    chrome.tabs.get(chrome.devtools.inspectedWindow.tabId, (tab) => {
-      chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' }, (shot) => {
-        entry._autoShot = chrome.runtime.lastError ? null : shot;
-        setTimeout(resolve, 550);
-      });
-    });
+  captureQueue = captureQueue.then(() => captureScreenshotCompat().then((shot) => {
+    entry._autoShot = shot;
+    return new Promise((resolve) => setTimeout(resolve, 550));
   }));
 }
 
@@ -350,9 +372,7 @@ function captureEntry(entry) {
       finish(entry._autoShot);
       return;
     }
-    chrome.tabs.get(chrome.devtools.inspectedWindow.tabId, (tab) => {
-      chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' }, finish);
-    });
+    captureScreenshotCompat().then(finish);
   });
 }
 
