@@ -27,7 +27,35 @@ like at that step, side by side.
 
 ## Install (unpacked)
 
+Built on Manifest V3 + the `chrome.devtools.*` APIs, so it loads the same way
+on any Chromium-based browser. Firefox and Safari are not supported — their
+extension/DevTools APIs differ enough that this would need a real port, not
+just repackaging.
+
+### Chrome
+
 1. Open `chrome://extensions`
+2. Enable **Developer mode** (top right)
+3. Click **Load unpacked**, select this folder
+4. Open DevTools on any page — a new **API Exporter** tab appears
+
+### Microsoft Edge
+
+1. Open `edge://extensions`
+2. Enable **Developer mode** (left sidebar)
+3. Click **Load unpacked**, select this folder
+4. Open DevTools on any page — a new **API Exporter** tab appears
+
+### Brave
+
+1. Open `brave://extensions`
+2. Enable **Developer mode** (top right)
+3. Click **Load unpacked**, select this folder
+4. Open DevTools on any page — a new **API Exporter** tab appears
+
+### Opera
+
+1. Open `opera://extensions`
 2. Enable **Developer mode** (top right)
 3. Click **Load unpacked**, select this folder
 4. Open DevTools on any page — a new **API Exporter** tab appears
