@@ -1,6 +1,7 @@
 const requests = [];
 let selectedIndex = -1;
 const steps = [];
+let captureAllAborted = false;
 
 const reqListEl = document.getElementById('reqlist');
 const searchEl = document.getElementById('search');
@@ -256,6 +257,11 @@ const detailTitle = document.getElementById('detailTitle');
 const detailBody = document.getElementById('detailBody');
 const detailClose = document.getElementById('detailClose');
 const detailResizer = document.getElementById('detailResizer');
+const detailCopyCurl = document.getElementById('detailCopyCurl');
+const detailCopyUrl = document.getElementById('detailCopyUrl');
+
+let currentDetailEntry = null;
+let currentDetailResponseRaw = null;
 
 detailClose.addEventListener('click', () => {
   detailPanel.hidden = true;
@@ -267,17 +273,89 @@ detailBody.addEventListener('click', (e) => {
   toggle.parentElement.classList.toggle('collapsed');
 });
 
+// This is the live panel's own clipboard write — unlike the copy buttons
+// baked into an exported .md/.html file, there's no markdown-sanitizer
+// stripping a <script> here, so it just works.
+function copyToClipboard(text, btn) {
+  if (text === null || text === undefined) return;
+  navigator.clipboard.writeText(text).then(() => {
+    const label = btn.querySelector('span');
+    const old = label.textContent;
+    btn.classList.add('copied');
+    label.textContent = 'Copied';
+    setTimeout(() => {
+      label.textContent = old;
+      btn.classList.remove('copied');
+    }, 900);
+  });
+}
+
+function buildCurlTextFromEntry(entry) {
+  const lines = ["curl --url '" + curlEscape(entry.request.url) + "' \\"];
+  const headers = entry.request.headers || [];
+  headers.forEach((h, i) => {
+    const last = i === headers.length - 1;
+    lines.push("  -H '" + curlEscape(h.name) + ': ' + curlEscape(h.value) + "'" + (last ? '' : ' \\'));
+  });
+  return lines.join('\n');
+}
+
+function formatForClipboard(raw) {
+  if (raw === null || raw === undefined || raw === '') return '-';
+  try {
+    return JSON.stringify(JSON.parse(raw), null, 2);
+  } catch (e) {
+    return raw;
+  }
+}
+
+function statusLineFromEntry(entry) {
+  return entry.response.status + ' ' + entry.response.statusText;
+}
+
+// "curl" copies the request as a runnable curl command plus the response —
+// payload isn't separately useful there since it's already inlined in the
+// curl command itself (as -d/postData, or query string in the URL).
+function buildCurlCombined(entry, responseRaw) {
+  return (
+    buildCurlTextFromEntry(entry) + '\n\n' +
+    'Status: ' + statusLineFromEntry(entry) + '\n\n' +
+    'Response:\n' + formatForClipboard(responseRaw)
+  );
+}
+
+// "url" is the plain endpoint/status/payload/response breakdown — payload
+// shown separately since there's no curl command to carry it here.
+function buildUrlCombined(entry, responseRaw) {
+  return (
+    entry.request.method + ' ' + entry.request.url + '\n\n' +
+    'Status: ' + statusLineFromEntry(entry) + '\n\n' +
+    'Payload:\n' + formatForClipboard(rawPayloadFromEntry(entry)) + '\n\n' +
+    'Response:\n' + formatForClipboard(responseRaw)
+  );
+}
+
+detailCopyCurl.addEventListener('click', () => {
+  if (currentDetailEntry) copyToClipboard(buildCurlCombined(currentDetailEntry, currentDetailResponseRaw), detailCopyCurl);
+});
+detailCopyUrl.addEventListener('click', () => {
+  if (currentDetailEntry) copyToClipboard(buildUrlCombined(currentDetailEntry, currentDetailResponseRaw), detailCopyUrl);
+});
+
 function openDetail(entry) {
   detailPanel.hidden = false;
   if (!detailPanel.style.height) detailPanel.style.height = '240px';
   const label = entry.request.method + ' ' + shortName(entry.request.url);
   detailTitle.textContent = label;
   detailBody.innerHTML = '<div class="hd-loading">Loading…</div>';
+  currentDetailEntry = entry;
+  currentDetailResponseRaw = null;
 
   const payloadRaw = rawPayloadFromEntry(entry);
   entry.getContent((content) => {
     if (detailPanel.hidden || detailTitle.textContent !== label) return;
     const responseRaw = sanitizeBody(content || '');
+    currentDetailResponseRaw = responseRaw;
     detailBody.innerHTML =
       '<div class="hd-label">Payload</div>' + renderBodyBlock(payloadRaw) +
       '<div class="hd-label">Response</div>' + renderBodyBlock(responseRaw);
@@ -388,26 +466,46 @@ function captureStep() {
 function showCaptureAllProgress(done, total) {
   stepsEl.innerHTML =
     '<div id="empty" class="capturing">' +
-    '<span class="spinner"></span>Capturing ' + done + ' of ' + total + '…' +
+    '<span class="spinner"></span>Capturing ' + done + ' of ' + total + '… ' +
+    '<button id="captureAllStopBtn" class="btn-danger">Stop</button>' +
     '</div>';
+  document.getElementById('captureAllStopBtn').addEventListener('click', (e) => {
+    captureAllAborted = true;
+    // The in-flight capture can't be cancelled mid-call (Chrome/Firefox
+    // both rate-limit captureVisibleTab, so it may already be waiting on
+    // that), but give instant feedback so the click doesn't look ignored
+    // while it finishes.
+    e.currentTarget.disabled = true;
+    e.currentTarget.textContent = 'Stopping…';
+  });
 }
 
 function captureAll() {
   const entries = getFilteredRequests();
   if (entries.length === 0) return;
+  captureAllAborted = false;
   captureAllBtn.disabled = true;
   captureBtn.disabled = true;
   showCaptureAllProgress(0, entries.length);
-  let chain = Promise.resolve();
-  entries.forEach((entry, i) => {
-    // Entries without an auto-shot need a live captureVisibleTab call,
-    // which Chrome throttles — space those out same as queueAutoShot.
-    chain = chain
-      .then(() => captureEntry(entry))
-      .then(() => showCaptureAllProgress(i + 1, entries.length))
-      .then(() => new Promise((r) => setTimeout(r, 120)));
-  });
-  chain.then(() => {
+
+  let i = 0;
+  function next() {
+    if (captureAllAborted || i >= entries.length) return Promise.resolve();
+    return captureEntry(entries[i]).then(() => {
+      i++;
+      // On abort, skip re-rendering progress entirely — rebuilding it here
+      // would replace the disabled "Stopping…" button with a fresh, live
+      // one, undoing the feedback the instant it appeared. Just end; the
+      // final .then() below swaps straight to the finished steps table.
+      if (captureAllAborted || i >= entries.length) return;
+      showCaptureAllProgress(i, entries.length);
+      // Entries without an auto-shot need a live captureVisibleTab call,
+      // which Chrome throttles — space those out same as queueAutoShot.
+      return new Promise((r) => setTimeout(r, 120)).then(next);
+    });
+  }
+
+  next().then(() => {
     captureAllBtn.disabled = false;
     captureBtn.disabled = selectedIndex < 0;
     renderSteps();
@@ -428,6 +526,34 @@ const DETAIL_ICON =
 const EDIT_ICON =
   '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
   '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>';
+
+const THUMB_COPY_ICON =
+  '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+  '<rect x="9" y="9" width="13" height="13" rx="2"></rect>' +
+  '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+
+const CHECK_ICON =
+  '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+  '<path d="M4 12.6111L8.92308 17.5L20 6.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+// Writes the actual image (not a data-URL string) to the clipboard, so it
+// pastes directly into Slack/docs/wherever as a picture.
+function copyImageToClipboard(dataUrl, btn) {
+  if (!dataUrl) return;
+  fetch(dataUrl)
+    .then((r) => r.blob())
+    .then((blob) => navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]))
+    .then(() => {
+      const old = btn.innerHTML;
+      btn.classList.add('copied');
+      btn.innerHTML = CHECK_ICON;
+      setTimeout(() => {
+        btn.innerHTML = old;
+        btn.classList.remove('copied');
+      }, 900);
+    })
+    .catch((err) => console.error('[API Step Exporter] copy image failed:', err));
+}
 
 const replaceImageInput = document.getElementById('replaceImageInput');
 let replaceImageTargetIdx = -1;
@@ -468,6 +594,7 @@ function renderSteps() {
     row.innerHTML =
       '<div class="col-thumb">' +
       '<button class="thumb-edit" title="Replace image">' + EDIT_ICON + '</button>' +
+      '<button class="thumb-copy" title="Copy image">' + THUMB_COPY_ICON + '</button>' +
       (step.screenshot ? '<img src="' + step.screenshot + '">' : '') +
       '</div>' +
       '<div class="col-method"><span class="method">' + step.method + '</span><span class="' + statusClass + '">' + step.status + '</span></div>' +
@@ -480,6 +607,9 @@ function renderSteps() {
     row.querySelector('.thumb-edit').addEventListener('click', () => {
       replaceImageTargetIdx = idx;
       replaceImageInput.click();
+    });
+    row.querySelector('.thumb-copy').addEventListener('click', (e) => {
+      copyImageToClipboard(step.screenshot, e.currentTarget);
     });
     row.querySelector('.step-detail').addEventListener('click', () => openStepModal(step));
     row.querySelector('.step-remove').addEventListener('click', (e) => {
