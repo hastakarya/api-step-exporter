@@ -157,6 +157,20 @@ function getCategory(entry) {
   return 'other';
 }
 
+// HTTP methods get a distinct color so they're scannable at a glance in a
+// dense list, same idea as the status-code coloring already in place.
+function methodClass(method) {
+  switch ((method || '').toUpperCase()) {
+    case 'GET': return 'method-get';
+    case 'POST': return 'method-post';
+    case 'PUT': return 'method-put';
+    case 'PATCH': return 'method-patch';
+    case 'DELETE': return 'method-delete';
+    case 'OPTIONS': return 'method-options';
+    default: return 'method-other';
+  }
+}
+
 function renderRequestList() {
   const filter = searchEl.value.toLowerCase();
   const typeFilter = typeFilterEl.value;
@@ -171,7 +185,7 @@ function renderRequestList() {
     div.title = url;
     const statusClass = status >= 400 ? 'status-err' : 'status-ok';
     div.innerHTML =
-      '<div class="col-name"><span class="method">' + entry.request.method + '</span>' + escapeHtml(shortName(url)) + '</div>' +
+      '<div class="col-name"><span class="method ' + methodClass(entry.request.method) + '">' + entry.request.method + '</span>' + escapeHtml(shortName(url)) + '</div>' +
       '<div class="col-status ' + statusClass + '">' + status + '</div>' +
       '<div class="col-type">' + escapeHtml(typeLabel(entry)) + '</div>';
     div.addEventListener('click', () => {
@@ -262,6 +276,7 @@ const detailCopyUrl = document.getElementById('detailCopyUrl');
 
 let currentDetailEntry = null;
 let currentDetailResponseRaw = null;
+let currentDetailLabel = null;
 
 detailClose.addEventListener('click', () => {
   detailPanel.hidden = true;
@@ -346,17 +361,21 @@ function openDetail(entry) {
   detailPanel.hidden = false;
   if (!detailPanel.style.height) detailPanel.style.height = '240px';
   const label = entry.request.method + ' ' + shortName(entry.request.url);
-  detailTitle.textContent = label;
+  detailTitle.innerHTML =
+    '<span class="method ' + methodClass(entry.request.method) + '">' + entry.request.method + '</span> ' +
+    escapeHtml(shortName(entry.request.url));
   detailBody.innerHTML = '<div class="hd-loading">Loading…</div>';
   currentDetailEntry = entry;
   currentDetailResponseRaw = null;
+  currentDetailLabel = label;
 
   const payloadRaw = rawPayloadFromEntry(entry);
   entry.getContent((content) => {
-    if (detailPanel.hidden || detailTitle.textContent !== label) return;
+    if (detailPanel.hidden || currentDetailLabel !== label) return;
     const responseRaw = sanitizeBody(content || '');
     currentDetailResponseRaw = responseRaw;
     detailBody.innerHTML =
+      '<div class="hd-label">URL</div><pre>' + escapeHtml(entry.request.url) + '</pre>' +
       '<div class="hd-label">Payload</div>' + renderBodyBlock(payloadRaw) +
       '<div class="hd-label">Response</div>' + renderBodyBlock(responseRaw);
   });
@@ -625,7 +644,7 @@ function renderSteps() {
       '<button class="thumb-copy" title="Copy image">' + THUMB_COPY_ICON + '</button>' +
       (step.screenshot ? '<img src="' + step.screenshot + '">' : '') +
       '</div>' +
-      '<div class="col-method"><span class="method">' + step.method + '</span><span class="' + statusClass + '">' + step.status + '</span></div>' +
+      '<div class="col-method"><span class="method ' + methodClass(step.method) + '">' + step.method + '</span><span class="' + statusClass + '">' + step.status + '</span></div>' +
       '<div class="col-apiname">' + escapeHtml(shortName(step.url)) + '</div>' +
       '<div class="col-apiurl" title="' + escapeHtml(step.url) + '">' + escapeHtml(step.url) + '</div>' +
       '<div class="col-action">' +
@@ -678,7 +697,9 @@ function rawPayloadFromStep(step) {
 
 function openStepModal(step) {
   stepModal.hidden = false;
-  stepModalTitle.textContent = step.method + ' ' + step.status + ' — ' + shortName(step.url);
+  stepModalTitle.innerHTML =
+    '<span class="method ' + methodClass(step.method) + '">' + step.method + '</span> ' +
+    step.status + ' — ' + escapeHtml(shortName(step.url));
   stepModalBody.innerHTML =
     (step.screenshot ? '<img src="' + step.screenshot + '">' : '') +
     '<div class="hd-label">URL</div><pre>' + escapeHtml(step.url) + '</pre>' +

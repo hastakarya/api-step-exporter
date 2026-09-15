@@ -144,11 +144,17 @@
   .req-item .col-name .method {
     display: inline-block;
     min-width: 52px;
-    color: var(--text-muted);
     margin-right: 8px;
     padding-right: 8px;
     border-right: 1px solid var(--border-soft);
   }
+  .method { font-weight: 600; }
+  .method-get { color: var(--json-number); }
+  .method-post { color: var(--json-string); }
+  .method-put, .method-patch { color: var(--json-boolean); }
+  .method-delete { color: var(--error); }
+  .method-options { color: var(--text-dim); }
+  .method-other { color: var(--text-muted); }
   .req-item .col-status { width: 46px; }
   .req-item .col-type {
     width: 70px;
