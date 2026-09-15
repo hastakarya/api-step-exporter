@@ -817,7 +817,7 @@ function buildCurlBlockHtml(step) {
   const responseText = formatResponse(step);
   return (
     '<p><strong>Request</strong> ' + copyBtn(curlText) + '</p>\n<pre><code>' + escapeHtml(curlText) + '</code></pre>\n' +
-    '<p><strong>Status:</strong> <code>' + step.status + ' ' + step.statusText + '</code></p>\n' +
+    '<p><strong>Status:</strong> <code>' + escapeHtml(step.status + ' ' + step.statusText) + '</code></p>\n' +
     '<p><strong>Response</strong> ' + copyBtn(responseText) + '</p>\n<pre><code>' + escapeHtml(responseText) + '</code></pre>'
   );
 }
@@ -828,7 +828,7 @@ function buildUrlBlockHtml(step) {
   const responseText = formatResponse(step);
   return (
     '<p><strong>Endpoint</strong> ' + copyBtn(step.url) + '</p>\n<pre><code>' + escapeHtml(endpoint) + '</code></pre>\n' +
-    '<p><strong>Status:</strong> <code>' + step.status + ' ' + step.statusText + '</code></p>\n' +
+    '<p><strong>Status:</strong> <code>' + escapeHtml(step.status + ' ' + step.statusText) + '</code></p>\n' +
     '<p><strong>Payload</strong> ' + copyBtn(payloadText) + '</p>\n<pre><code>' + escapeHtml(payloadText) + '</code></pre>\n' +
     '<p><strong>Response</strong> ' + copyBtn(responseText) + '</p>\n<pre><code>' + escapeHtml(responseText) + '</code></pre>'
   );
