@@ -35,10 +35,11 @@ like at that step, side by side.
   resizable, closable panel (drag its top edge, like DevTools' own split
   panes) with a collapsible, color-coded JSON tree for payload and response.
 - **Step table** — each captured step shows its thumbnail, method + status,
-  API name, and URL. Per step: a 👁 button opens a modal with the full-size
-  screenshot plus the same JSON tree for payload/response (each in its own
-  scroll box, so a long response doesn't push the image off-screen), a ✎
-  button lets you swap the screenshot for your own image, and 🗑 removes it.
+  API name, and URL. Per step: a <img src="store-assets/icons/eye.svg" width="13" height="13" alt=""> **view** button opens a modal with the
+  full-size screenshot plus the same JSON tree for payload/response (each in
+  its own scroll box, so a long response doesn't push the image off-screen),
+  an <img src="store-assets/icons/edit.svg" width="13" height="13" alt=""> **edit** button lets you swap the screenshot for your own image, and
+  <img src="store-assets/icons/trash.svg" width="13" height="13" alt=""> **remove** deletes it.
 - **Binary-safe** — file uploads and other binary bodies are detected (by
   non-printable character ratio) and replaced with a short placeholder
   instead of dumping unreadable bytes.
@@ -103,8 +104,8 @@ self-distributed).
 2. Click a request in the list (or use **Capture All (filtered)** to grab
    everything matching the current search/type filter)
 3. Click **Capture Step** to add it to your export
-4. In the step table: 👁 to review a step in full, ✎ to swap its screenshot,
-   🗑 to remove it
+4. In the step table: <img src="store-assets/icons/eye.svg" width="13" height="13" alt=""> **view** to review a step in full, <img src="store-assets/icons/edit.svg" width="13" height="13" alt=""> **edit** to swap its
+   screenshot, <img src="store-assets/icons/trash.svg" width="13" height="13" alt=""> **remove** to delete it
 5. Pick a format from **Export ▾** — curl or url/status, Markdown or HTML
 
 ## License
