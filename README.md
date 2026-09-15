@@ -5,6 +5,20 @@ screenshot per step, and export the whole flow as a Markdown or HTML
 document — request, payload, response, and a picture of what the app looked
 like at that step, side by side.
 
+## Screenshots
+
+**The DevTools panel** — request list, click-to-inspect detail panel with a collapsible JSON tree, and a captured step ready to export:
+
+![API Exporter panel](store-assets/screenshots/screenshot-1.png)
+
+**Export ▾ menu** — curl or url/status format, each as Markdown or HTML:
+
+![Export format menu](store-assets/screenshots/screenshot-3.png)
+
+**HTML export output** — screenshot, endpoint, payload, and response, each with its own working copy button:
+
+![Exported HTML output](store-assets/screenshots/screenshot-5.png)
+
 ## Features
 
 - **DevTools panel** ("API Exporter" tab) lists network requests like the
