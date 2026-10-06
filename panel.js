@@ -322,13 +322,8 @@ function copyToClipboard(text, btn) {
 }
 
 function buildCurlTextFromEntry(entry) {
-  const lines = ["curl --url '" + curlEscape(entry.request.url) + "' \\"];
-  const headers = entry.request.headers || [];
-  headers.forEach((h, i) => {
-    const last = i === headers.length - 1;
-    lines.push("  -H '" + curlEscape(h.name) + ': ' + curlEscape(h.value) + "'" + (last ? '' : ' \\'));
-  });
-  return lines.join('\n');
+  const body = entry.request.postData ? sanitizeBody(entry.request.postData.text) : null;
+  return buildCurlCommand(entry.request.url, entry.request.method, entry.request.headers || [], body);
 }
 
 function formatForClipboard(raw) {
@@ -345,8 +340,8 @@ function statusLineFromEntry(entry) {
 }
 
 // "curl" copies the request as a runnable curl command plus the response —
-// payload isn't separately useful there since it's already inlined in the
-// curl command itself (as -d/postData, or query string in the URL).
+// payload isn't listed separately since the command already carries it
+// (--data-raw for a body, or the query string in the URL).
 function buildCurlCombined(entry, responseRaw) {
   return (
     buildCurlTextFromEntry(entry) + '\n\n' +
@@ -472,9 +467,15 @@ function looksBinary(text) {
   return bad / len > 0.02;
 }
 
+const BINARY_PLACEHOLDER_PREFIX = '[binary data omitted';
+
+function isBinaryPlaceholder(text) {
+  return text.indexOf(BINARY_PLACEHOLDER_PREFIX) === 0;
+}
+
 function sanitizeBody(text) {
   if (!text) return text;
-  return looksBinary(text) ? '[binary data omitted — ' + text.length + ' chars]' : text;
+  return looksBinary(text) ? BINARY_PLACEHOLDER_PREFIX + ' — ' + text.length + ' chars]' : text;
 }
 
 function getFilteredRequests() {
@@ -751,14 +752,36 @@ function curlEscape(v) {
   return v.replace(/'/g, "'\\''");
 }
 
-function buildCurlBlock(step) {
-  let lines = ["curl --url '" + curlEscape(step.url) + "' \\"];
-  step.requestHeaders.forEach((h, i) => {
-    const last = i === step.requestHeaders.length - 1;
-    lines.push("  -H '" + curlEscape(h.name) + ': ' + curlEscape(h.value) + "'" + (last ? '' : ' \\'));
+// Headers curl fills in itself: forwarding a stale content-length or an
+// accept-encoding it won't decompress breaks the replayed request.
+const CURL_SKIPPED_HEADERS = ['accept-encoding', 'content-length', 'host'];
+
+// Mirrors Chrome's own "Copy as cURL" so the command is actually runnable:
+// HTTP/2 pseudo-headers (:authority, :path, ...) are dropped, cookies go in
+// -b, and the request body and any non-default method are included.
+function buildCurlCommand(url, method, headers, postData) {
+  const hasBody = !!postData && !isBinaryPlaceholder(postData);
+  const parts = ["curl --url '" + curlEscape(url) + "'"];
+  // Quoted because a method is an HTTP token, and tokens may legally
+  // contain shell characters such as backticks.
+  if (method !== 'GET' && !(method === 'POST' && hasBody)) {
+    parts.push("-X '" + curlEscape(method) + "'");
+  }
+  headers.forEach((h) => {
+    const name = h.name.toLowerCase();
+    if (name.charAt(0) === ':' || CURL_SKIPPED_HEADERS.indexOf(name) !== -1) return;
+    parts.push(name === 'cookie'
+      ? "-b '" + curlEscape(h.value) + "'"
+      : "-H '" + curlEscape(h.name) + ': ' + curlEscape(h.value) + "'");
   });
+  if (hasBody) parts.push("--data-raw '" + curlEscape(postData) + "'");
+  return parts.join(' \\\n  ');
+}
+
+function buildCurlBlock(step) {
+  const curlText = buildCurlCommand(step.url, step.method, step.requestHeaders, step.postData);
   return (
-    '**Request**\n```bash\n' + lines.join('\n') + '\n```\n\n' +
+    '**Request**\n```bash\n' + curlText + '\n```\n\n' +
     '**Status:** `' + step.status + ' ' + step.statusText + '`\n\n' +
     '**Response**\n```json\n' + formatResponse(step) + '\n```'
   );
@@ -876,12 +899,7 @@ const COPY_JS =
   '});';
 
 function buildCurlBlockHtml(step) {
-  let lines = ["curl --url '" + curlEscape(step.url) + "' \\"];
-  step.requestHeaders.forEach((h, i) => {
-    const last = i === step.requestHeaders.length - 1;
-    lines.push("  -H '" + curlEscape(h.name) + ': ' + curlEscape(h.value) + "'" + (last ? '' : ' \\'));
-  });
-  const curlText = lines.join('\n');
+  const curlText = buildCurlCommand(step.url, step.method, step.requestHeaders, step.postData);
   const responseText = formatResponse(step);
   return (
     '<p><strong>Request</strong> ' + copyBtn(curlText) + '</p>\n<pre><code>' + escapeHtml(curlText) + '</code></pre>\n' +
