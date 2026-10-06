@@ -46,9 +46,25 @@ function captureScreenshotCompat() {
 
 let captureQueue = Promise.resolve();
 
+// Chrome drops a response body once the page navigates, so a lazy
+// getContent() at click time returns nothing after a redirect. Memoize the
+// fetch on the entry: API calls start it the moment they finish, other
+// types start it on first read, and every reader shares the same result.
+function getBody(entry) {
+  if (!entry._bodyPromise) {
+    entry._bodyPromise = new Promise((resolve) => {
+      entry.getContent((content) => resolve(content || ''));
+    });
+  }
+  return entry._bodyPromise;
+}
+
 chrome.devtools.network.onRequestFinished.addListener((entry) => {
   requests.push(entry);
-  if (getCategory(entry) === 'fetchxhr') queueAutoShot(entry);
+  if (getCategory(entry) === 'fetchxhr') {
+    getBody(entry);
+    queueAutoShot(entry);
+  }
   renderRequestList();
 });
 
@@ -370,9 +386,9 @@ function openDetail(entry) {
   currentDetailLabel = label;
 
   const payloadRaw = rawPayloadFromEntry(entry);
-  entry.getContent((content) => {
+  getBody(entry).then((content) => {
     if (detailPanel.hidden || currentDetailLabel !== label) return;
-    const responseRaw = sanitizeBody(content || '');
+    const responseRaw = sanitizeBody(content);
     currentDetailResponseRaw = responseRaw;
     detailBody.innerHTML =
       '<div class="hd-label">URL</div><pre>' + escapeHtml(entry.request.url) + '</pre>' +
@@ -474,7 +490,7 @@ function getFilteredRequests() {
 function captureEntry(entry) {
   return new Promise((resolve) => {
     const finish = (screenshot) => {
-      entry.getContent((content) => {
+      getBody(entry).then((content) => {
         steps.push({
           method: entry.request.method,
           url: entry.request.url,
@@ -483,7 +499,7 @@ function captureEntry(entry) {
           requestHeaders: entry.request.headers || [],
           queryString: entry.request.queryString || [],
           postData: entry.request.postData ? sanitizeBody(entry.request.postData.text) : null,
-          responseBody: sanitizeBody(content || ''),
+          responseBody: sanitizeBody(content),
           screenshot: screenshot || null,
         });
         resolve();
@@ -757,6 +773,37 @@ function buildUrlBlock(step) {
   );
 }
 
+// "simreplacement.kloc.co" -> "simreplacement". IPs and single-label hosts
+// like localhost stay whole, since their first label alone says nothing.
+// The host is whichever one the captured steps hit most (first seen on a tie),
+// because the inspected page itself is often just localhost.
+function exportHostLabel() {
+  const counts = {};
+  steps.forEach((step) => {
+    let host = '';
+    try {
+      host = new URL(step.url).hostname;
+    } catch (e) {
+      return;
+    }
+    if (host) counts[host] = (counts[host] || 0) + 1;
+  });
+  const host = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0] || 'export';
+  const bare = host.replace(/^www\./, '');
+  const label = /^[\d.]+$/.test(bare) || bare.indexOf('.') === -1 ? bare : bare.split('.')[0];
+  return label.replace(/[^a-z0-9-]/gi, '-').replace(/^-+|-+$/g, '');
+}
+
+// DD-MM-YYYY-HH-mm in local time. No colon: it's illegal in Windows
+// filenames and browsers rewrite it, so the name would change on download.
+function exportFilename(ext) {
+  const pad = (n) => String(n).padStart(2, '0');
+  const d = new Date();
+  const stamp = pad(d.getDate()) + '-' + pad(d.getMonth() + 1) + '-' + d.getFullYear() +
+    '-' + pad(d.getHours()) + '-' + pad(d.getMinutes());
+  return exportHostLabel() + '-api-steps-' + stamp + '.' + ext;
+}
+
 function downloadFile(content, mime, filename) {
   const blob = new Blob([content], { type: mime });
   const a = document.createElement('a');
@@ -777,7 +824,7 @@ function exportMarkdown(format) {
     parts.push(format === 'curl' ? buildCurlBlock(step) : buildUrlBlock(step));
     parts.push('\n---\n');
   });
-  downloadFile(parts.join('\n'), 'text/markdown', 'api-steps.md');
+  downloadFile(parts.join('\n'), 'text/markdown', exportFilename('md'));
 }
 
 // Copy buttons only exist in the .html export. Markdown viewers (GitHub,
@@ -878,5 +925,5 @@ function exportHtml(format) {
     'pre{background:#f5f7fa;border:1px solid #e1e4e8;border-radius:6px;padding:10px;overflow-x:auto;font-family:"SF Mono",Menlo,Consolas,monospace;font-size:12px;}\n' +
     'h1,h2{border-bottom:1px solid #e1e4e8;padding-bottom:6px;}\n' +
     COPY_STYLE + '\n</style>\n</head>\n<body>\n' + body + '\n<script>\n' + COPY_JS + '\n</' + 'script>\n</body>\n</html>\n';
-  downloadFile(html, 'text/html', 'api-steps.html');
+  downloadFile(html, 'text/html', exportFilename('html'));
 }
