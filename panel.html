@@ -226,6 +226,15 @@
     flex: 1;
     overflow-y: auto;
   }
+  #version {
+    flex: none;
+    padding: 2px 8px;
+    border-top: 1px solid var(--border-soft);
+    font-size: 10px;
+    color: var(--text-dim);
+    text-align: right;
+    user-select: text;
+  }
   #step-table-head {
     display: flex;
     align-items: center;
@@ -257,6 +266,18 @@
     border: 1px solid var(--border);
     border-radius: 4px;
     display: block;
+  }
+  .thumb-err {
+    width: 140px;
+    max-height: 96px;
+    overflow: auto;
+    padding: 4px 6px;
+    box-sizing: border-box;
+    border: 1px dashed var(--border);
+    border-radius: 4px;
+    font-size: 10px;
+    color: var(--text-muted);
+    word-break: break-word;
   }
   .thumb-edit {
     position: absolute;
@@ -610,6 +631,7 @@
     </div>
     <div id="steps"><div id="empty">No steps yet. Select a request on the left, then click "Capture Step".</div></div>
     <input type="file" id="replaceImageInput" accept="image/*" hidden>
+    <div id="version"></div>
   </div>
   <div id="stepModal" hidden>
     <div class="step-modal-card">

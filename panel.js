@@ -12,6 +12,7 @@ const exportMenuBtn = document.getElementById('exportMenuBtn');
 const exportMenu = document.getElementById('exportMenu');
 const clearBtn = document.getElementById('clearBtn');
 const includeImagesChk = document.getElementById('includeImagesChk');
+document.getElementById('version').textContent = 'v' + chrome.runtime.getManifest().version;
 const clearListBtn = document.getElementById('clearListBtn');
 const stepsEl = document.getElementById('steps');
 const themeToggle = document.getElementById('themeToggle');
@@ -27,17 +28,31 @@ const devtoolsNS = isFirefox ? browser : chrome;
 // extension's background script has full access. So on Firefox we relay
 // the capture through background.js via messaging instead of calling
 // tabs.* directly; on Chrome the panel already has full chrome.tabs access.
+let lastCaptureError = '';
+
 function captureScreenshotCompat() {
   const tabId = devtoolsNS.devtools.inspectedWindow.tabId;
   if (isFirefox) {
     return browser.runtime.sendMessage({ type: 'CAPTURE_TAB', tabId }).then(
-      (res) => (res && res.ok ? res.shot : null),
-      () => null
+      (res) => {
+        lastCaptureError = res && res.ok ? '' : (res && res.error) || 'no response from background';
+        return res && res.ok ? res.shot : null;
+      },
+      (err) => {
+        lastCaptureError = String(err);
+        return null;
+      }
     );
   }
   return new Promise((resolve) => {
     chrome.tabs.get(tabId, (tab) => {
+      if (chrome.runtime.lastError || !tab) {
+        lastCaptureError = chrome.runtime.lastError ? chrome.runtime.lastError.message : 'tab not found';
+        resolve(null);
+        return;
+      }
       chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' }, (shot) => {
+        lastCaptureError = chrome.runtime.lastError ? chrome.runtime.lastError.message : '';
         resolve(chrome.runtime.lastError ? null : shot);
       });
     });
@@ -73,6 +88,7 @@ chrome.devtools.network.onRequestFinished.addListener((entry) => {
 function queueAutoShot(entry) {
   captureQueue = captureQueue.then(() => captureScreenshotCompat().then((shot) => {
     entry._autoShot = shot;
+    entry._autoShotError = shot ? '' : lastCaptureError;
     return new Promise((resolve) => setTimeout(resolve, 550));
   }));
 }
@@ -163,6 +179,11 @@ function getCategory(entry) {
   if (rt === 'wasm') return 'wasm';
   if (rt) return 'other';
 
+  // Firefox's HAR has no _resourceType. fetch()/XHR requests carry
+  // Sec-Fetch-Dest: empty, which catches ones whose response isn't JSON/XML.
+  const dest = (entry.request.headers || []).find((h) => h.name.toLowerCase() === 'sec-fetch-dest');
+  if (dest && dest.value === 'empty') return 'fetchxhr';
+
   const mime = (entry.response.content && entry.response.content.mimeType) || '';
   if (mime.includes('json') || mime.includes('xml')) return 'fetchxhr';
   if (mime.includes('html')) return 'doc';
@@ -218,60 +239,175 @@ function truncate(text, n) {
   return text.length > n ? text.slice(0, n) + '…' : text;
 }
 
+// Query parameters as an object. Repeated keys (?ids=1&ids=2) become an
+// array instead of the last one silently winning. Null-prototype so keys
+// like "constructor" or "__proto__" are ordinary entries.
+function queryToObject(qs) {
+  const obj = Object.create(null);
+  qs.forEach((q) => {
+    if (!(q.name in obj)) obj[q.name] = q.value;
+    else if (Array.isArray(obj[q.name])) obj[q.name].push(q.value);
+    else obj[q.name] = [obj[q.name], q.value];
+  });
+  return obj;
+}
+
+// Re-indents JSON without parsing its values, so numbers, key order and
+// duplicate keys come out exactly as sent. JSON.parse + stringify would
+// round integers past 2^53, turn 10.50 into 10.5, move numeric-looking
+// keys to the front, and drop all but the last duplicate key.
+function prettyJson(text) {
+  try {
+    JSON.parse(text);
+  } catch (e) {
+    return text;
+  }
+  let out = '';
+  let depth = 0;
+  let inString = false;
+  const newline = () => '\n' + '  '.repeat(depth);
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inString) {
+      out += c;
+      if (c === '\\') out += text[++i];
+      else if (c === '"') inString = false;
+    } else if (c === '"') {
+      inString = true;
+      out += c;
+    } else if (c === '{' || c === '[') {
+      let j = i + 1;
+      while (/\s/.test(text[j])) j++;
+      if (text[j] === (c === '{' ? '}' : ']')) {
+        out += c + text[j];
+        i = j;
+      } else {
+        depth++;
+        out += c + newline();
+      }
+    } else if (c === '}' || c === ']') {
+      depth--;
+      out += newline() + c;
+    } else if (c === ',') {
+      out += ',' + newline();
+    } else if (c === ':') {
+      out += ': ';
+    } else if (!/\s/.test(c)) {
+      out += c;
+    }
+  }
+  return out;
+}
+
 // Mirrors buildPayload(), but reads straight off a HAR entry (available
 // immediately) rather than a captured step, since opening the detail
 // panel shouldn't require capturing first. Returns the raw (unformatted)
-// text — renderBodyBlock() decides how to display it.
+// text — renderBodyBlock() decides how to display it. The body wins over
+// the query string: the query is already visible in the URL, and showing it
+// instead of the body hid what the request actually sent.
 function rawPayloadFromEntry(entry) {
+  const body = entry.request.postData && entry.request.postData.text;
+  if (body) return sanitizeBody(body);
   const qs = entry.request.queryString || [];
-  if (qs.length) {
-    const obj = {};
-    qs.forEach((q) => { obj[q.name] = q.value; });
-    return JSON.stringify(obj);
+  return qs.length ? JSON.stringify(queryToObject(qs)) : null;
+}
+
+// Parses already-validated JSON text into a display tree. Unlike JSON.parse
+// it never turns numbers into doubles or objects into key-collapsing maps, so
+// the tree shows what was sent: integers past 2^53, 10.50, duplicate keys and
+// the original key order. Objects are entry lists, numbers keep their text.
+function parseJsonLossless(text) {
+  let i = 0;
+  const skipSpace = () => {
+    while (/\s/.test(text[i])) i++;
+  };
+  function string() {
+    const start = i++;
+    while (text[i] !== '"') {
+      if (text[i] === '\\') i++;
+      i++;
+    }
+    i++;
+    return JSON.parse(text.slice(start, i));
   }
-  if (entry.request.postData && entry.request.postData.text) {
-    return sanitizeBody(entry.request.postData.text);
+  function value() {
+    skipSpace();
+    const c = text[i];
+    if (c === '{') {
+      const entries = [];
+      i++;
+      skipSpace();
+      if (text[i] === '}') {
+        i++;
+        return { type: 'object', entries };
+      }
+      for (;;) {
+        skipSpace();
+        const key = string();
+        skipSpace();
+        i++;
+        entries.push({ key, value: value() });
+        skipSpace();
+        if (text[i++] === '}') return { type: 'object', entries };
+      }
+    }
+    if (c === '[') {
+      const items = [];
+      i++;
+      skipSpace();
+      if (text[i] === ']') {
+        i++;
+        return { type: 'array', items };
+      }
+      for (;;) {
+        items.push(value());
+        skipSpace();
+        if (text[i++] === ']') return { type: 'array', items };
+      }
+    }
+    if (c === '"') return { type: 'string', value: string() };
+    const start = i;
+    while (i < text.length && !/[\s,\]}]/.test(text[i])) i++;
+    const raw = text.slice(start, i);
+    if (raw === 'null') return { type: 'null' };
+    if (raw === 'true' || raw === 'false') return { type: 'boolean', raw };
+    return { type: 'number', raw };
   }
-  return null;
+  return value();
 }
 
 // Renders a collapsible, color-coded JSON tree (à la DevTools' own object
 // viewer) when the body parses as JSON; otherwise falls back to plain text.
 function renderBodyBlock(raw) {
   if (raw === null || raw === undefined || raw === '') return '<pre>-</pre>';
-  let parsed;
   try {
-    parsed = JSON.parse(raw);
+    JSON.parse(raw);
   } catch (e) {
-    parsed = undefined;
+    return '<pre>' + escapeHtml(truncate(raw, 4000)) + '</pre>';
   }
-  if (parsed === undefined) return '<pre>' + escapeHtml(truncate(raw, 4000)) + '</pre>';
-  return '<div class="json-root">' + jsonToHtml(parsed) + '</div>';
+  return '<div class="json-root">' + jsonToHtml(parseJsonLossless(raw)) + '</div>';
 }
 
-function jsonLeafHtml(value) {
-  if (value === null) return '<span class="json-null">null</span>';
-  if (typeof value === 'string') return '<span class="json-string">"' + escapeHtml(value) + '"</span>';
-  if (typeof value === 'number') return '<span class="json-number">' + value + '</span>';
-  if (typeof value === 'boolean') return '<span class="json-boolean">' + value + '</span>';
-  return escapeHtml(String(value));
+function jsonLeafHtml(node) {
+  if (node.type === 'null') return '<span class="json-null">null</span>';
+  if (node.type === 'string') return '<span class="json-string">"' + escapeHtml(node.value) + '"</span>';
+  return '<span class="json-' + node.type + '">' + escapeHtml(node.raw) + '</span>';
 }
 
-function jsonToHtml(value) {
-  if (value === null || typeof value !== 'object') return jsonLeafHtml(value);
+function jsonToHtml(node) {
+  if (node.type !== 'object' && node.type !== 'array') return jsonLeafHtml(node);
 
-  const isArray = Array.isArray(value);
-  const keys = isArray ? value.map((_, i) => i) : Object.keys(value);
-  if (keys.length === 0) return '<span class="json-punct">' + (isArray ? '[]' : '{}') + '</span>';
+  const isArray = node.type === 'array';
+  const children = isArray ? node.items.map((v) => ({ value: v })) : node.entries;
+  if (children.length === 0) return '<span class="json-punct">' + (isArray ? '[]' : '{}') + '</span>';
 
-  const rows = keys.map((k, i) => {
-    const v = value[k];
-    const keyHtml = isArray ? '' : '<span class="json-key">"' + escapeHtml(k) + '"</span><span class="json-punct">: </span>';
-    const comma = i === keys.length - 1 ? '' : '<span class="json-punct">,</span>';
-    return '<div class="json-row">' + keyHtml + jsonToHtml(v) + comma + '</div>';
+  const rows = children.map((child, i) => {
+    const keyHtml = isArray ? '' : '<span class="json-key">"' + escapeHtml(child.key) + '"</span><span class="json-punct">: </span>';
+    const comma = i === children.length - 1 ? '' : '<span class="json-punct">,</span>';
+    return '<div class="json-row">' + keyHtml + jsonToHtml(child.value) + comma + '</div>';
   }).join('');
 
-  const count = keys.length + (isArray ? (keys.length === 1 ? ' item' : ' items') : (keys.length === 1 ? ' key' : ' keys'));
+  const count = children.length + (isArray ? (children.length === 1 ? ' item' : ' items') : (children.length === 1 ? ' key' : ' keys'));
   return (
     '<div class="json-node">' +
     '<span class="json-toggle">▾</span><span class="json-punct">' + (isArray ? '[' : '{') + '</span>' +
@@ -328,15 +464,15 @@ function buildCurlTextFromEntry(entry) {
 
 function formatForClipboard(raw) {
   if (raw === null || raw === undefined || raw === '') return '-';
-  try {
-    return JSON.stringify(JSON.parse(raw), null, 2);
-  } catch (e) {
-    return raw;
-  }
+  return prettyJson(raw);
+}
+
+function statusLabel(status, statusText) {
+  return (status + ' ' + (statusText || '')).trim();
 }
 
 function statusLineFromEntry(entry) {
-  return entry.response.status + ' ' + entry.response.statusText;
+  return statusLabel(entry.response.status, entry.response.statusText);
 }
 
 // "curl" copies the request as a runnable curl command plus the response —
@@ -490,7 +626,7 @@ function getFilteredRequests() {
 
 function captureEntry(entry) {
   return new Promise((resolve) => {
-    const finish = (screenshot) => {
+    const finish = (screenshot, shotError) => {
       getBody(entry).then((content) => {
         steps.push({
           method: entry.request.method,
@@ -502,6 +638,7 @@ function captureEntry(entry) {
           postData: entry.request.postData ? sanitizeBody(entry.request.postData.text) : null,
           responseBody: sanitizeBody(content),
           screenshot: screenshot || null,
+          screenshotError: screenshot ? '' : shotError || '',
         });
         resolve();
       });
@@ -511,10 +648,10 @@ function captureEntry(entry) {
     // it reflects the page as it looked at that moment, not whenever
     // the user later captures the row.
     if (entry._autoShot !== undefined) {
-      finish(entry._autoShot);
+      finish(entry._autoShot, entry._autoShotError);
       return;
     }
-    captureScreenshotCompat().then(finish);
+    captureScreenshotCompat().then((shot) => finish(shot, lastCaptureError));
   });
 }
 
@@ -659,7 +796,7 @@ function renderSteps() {
       '<div class="col-thumb">' +
       '<button class="thumb-edit" title="Replace image">' + EDIT_ICON + '</button>' +
       '<button class="thumb-copy" title="Copy image">' + THUMB_COPY_ICON + '</button>' +
-      (step.screenshot ? '<img src="' + step.screenshot + '">' : '') +
+      (step.screenshot ? '<img src="' + step.screenshot + '">' : '<div class="thumb-err">' + escapeHtml(step.screenshotError || 'No screenshot') + '</div>') +
       '</div>' +
       '<div class="col-method"><span class="method ' + methodClass(step.method) + '">' + step.method + '</span><span class="' + statusClass + '">' + step.status + '</span></div>' +
       '<div class="col-apiname">' + escapeHtml(shortName(step.url)) + '</div>' +
@@ -704,12 +841,9 @@ stepModalBody.addEventListener('click', (e) => {
 // Mirrors rawPayloadFromEntry(), but reads off an already-captured step
 // (raw text stored at capture time) instead of a live HAR entry.
 function rawPayloadFromStep(step) {
-  if (step.queryString && step.queryString.length) {
-    const obj = {};
-    step.queryString.forEach((q) => { obj[q.name] = q.value; });
-    return JSON.stringify(obj);
-  }
-  return step.postData || null;
+  if (step.postData) return step.postData;
+  const qs = step.queryString || [];
+  return qs.length ? JSON.stringify(queryToObject(qs)) : null;
 }
 
 function openStepModal(step) {
@@ -725,27 +859,14 @@ function openStepModal(step) {
 }
 
 function buildPayload(step) {
-  if (step.queryString && step.queryString.length) {
-    const obj = {};
-    step.queryString.forEach((q) => { obj[q.name] = q.value; });
-    return JSON.stringify(obj).replace(/"([^"]+)":/g, '$1: ');
-  }
-  if (step.postData) {
-    try {
-      return JSON.stringify(JSON.parse(step.postData), null, 2);
-    } catch (e) {
-      return step.postData;
-    }
-  }
+  if (step.postData) return prettyJson(step.postData);
+  const qs = step.queryString || [];
+  if (qs.length) return JSON.stringify(queryToObject(qs)).replace(/"([^"]+)":/g, '$1: ');
   return '-';
 }
 
 function formatResponse(step) {
-  try {
-    return JSON.stringify(JSON.parse(step.responseBody), null, 2);
-  } catch (e) {
-    return step.responseBody;
-  }
+  return prettyJson(step.responseBody);
 }
 
 function curlEscape(v) {
@@ -782,7 +903,7 @@ function buildCurlBlock(step) {
   const curlText = buildCurlCommand(step.url, step.method, step.requestHeaders, step.postData);
   return (
     '**Request**\n```bash\n' + curlText + '\n```\n\n' +
-    '**Status:** `' + step.status + ' ' + step.statusText + '`\n\n' +
+    '**Status:** `' + statusLabel(step.status, step.statusText) + '`\n\n' +
     '**Response**\n```json\n' + formatResponse(step) + '\n```'
   );
 }
@@ -790,7 +911,7 @@ function buildCurlBlock(step) {
 function buildUrlBlock(step) {
   return (
     '**Endpoint**\n```http\n' + step.method + ' ' + step.url + '\n```\n\n' +
-    '**Status:** `' + step.status + ' ' + step.statusText + '`\n\n' +
+    '**Status:** `' + statusLabel(step.status, step.statusText) + '`\n\n' +
     '**Payload**\n```json\n' + buildPayload(step) + '\n```\n\n' +
     '**Response**\n```json\n' + formatResponse(step) + '\n```'
   );
@@ -903,7 +1024,7 @@ function buildCurlBlockHtml(step) {
   const responseText = formatResponse(step);
   return (
     '<p><strong>Request</strong> ' + copyBtn(curlText) + '</p>\n<pre><code>' + escapeHtml(curlText) + '</code></pre>\n' +
-    '<p><strong>Status:</strong> <code>' + escapeHtml(step.status + ' ' + step.statusText) + '</code></p>\n' +
+    '<p><strong>Status:</strong> <code>' + escapeHtml(statusLabel(step.status, step.statusText)) + '</code></p>\n' +
     '<p><strong>Response</strong> ' + copyBtn(responseText) + '</p>\n<pre><code>' + escapeHtml(responseText) + '</code></pre>'
   );
 }
@@ -914,7 +1035,7 @@ function buildUrlBlockHtml(step) {
   const responseText = formatResponse(step);
   return (
     '<p><strong>Endpoint</strong> ' + copyBtn(step.url) + '</p>\n<pre><code>' + escapeHtml(endpoint) + '</code></pre>\n' +
-    '<p><strong>Status:</strong> <code>' + escapeHtml(step.status + ' ' + step.statusText) + '</code></p>\n' +
+    '<p><strong>Status:</strong> <code>' + escapeHtml(statusLabel(step.status, step.statusText)) + '</code></p>\n' +
     '<p><strong>Payload</strong> ' + copyBtn(payloadText) + '</p>\n<pre><code>' + escapeHtml(payloadText) + '</code></pre>\n' +
     '<p><strong>Response</strong> ' + copyBtn(responseText) + '</p>\n<pre><code>' + escapeHtml(responseText) + '</code></pre>'
   );
