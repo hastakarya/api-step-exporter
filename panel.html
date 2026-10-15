@@ -498,6 +498,214 @@
     background: var(--bg-alt);
   }
   label { display: flex; align-items: center; gap: 4px; }
+
+  #resendModal {
+    position: fixed;
+    inset: 0;
+    z-index: 220;
+    background: rgba(0, 0, 0, .5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #resendModal[hidden] { display: none; }
+  .resend-modal-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    width: min(720px, 94vw);
+    max-height: 88vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, .35);
+    overflow: hidden;
+  }
+  .resend-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--bg-alt);
+    border-bottom: 1px solid var(--border-soft);
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+    flex: none;
+  }
+  .resend-modal-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+  }
+  .resend-title-badge {
+    padding: 2px 6px;
+    background: var(--accent);
+    color: var(--bg);
+    border-radius: 3px;
+    font-size: 10px;
+    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    font-weight: 600;
+  }
+  #resendModalSub {
+    color: var(--text-muted);
+    font-size: 10px;
+  }
+  #resendModalClose {
+    padding: 2px 7px;
+    flex: none;
+  }
+  .resend-modal-body {
+    padding: 14px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .resend-endpoint-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .resend-select {
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .resend-input {
+    flex: 1;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+  }
+  .resend-input:focus, .resend-select:focus, .resend-textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .resend-tabs-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border-soft);
+    padding-bottom: 4px;
+  }
+  .resend-tabs {
+    display: flex;
+    gap: 4px;
+  }
+  .resend-tab {
+    padding: 4px 10px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px 4px 0 0;
+    color: var(--text-muted);
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .resend-tab.active {
+    color: var(--text);
+    font-weight: 600;
+    background: var(--bg-alt);
+    border-color: var(--border-soft);
+    border-bottom-color: transparent;
+  }
+  .resend-tab-actions {
+    display: flex;
+    gap: 4px;
+  }
+  .resend-tab-actions button {
+    padding: 3px 8px;
+    font-size: 10px;
+  }
+  .resend-textarea {
+    width: 100%;
+    min-height: 140px;
+    max-height: 260px;
+    padding: 8px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 11px;
+    line-height: 1.45;
+    background: var(--bg-alt);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    box-sizing: border-box;
+    resize: vertical;
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .resend-actions-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-top: 4px;
+  }
+  .resend-mode-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-muted);
+    font-size: 11px;
+  }
+  .resend-select-sm {
+    padding: 4px 6px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 11px;
+  }
+  .resend-btns {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #resendResponseArea {
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+    margin-top: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  #resendResponseArea[hidden] { display: none; }
+  .resend-res-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .resend-res-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .resend-res-time {
+    color: var(--text-dim);
+    font-size: 10px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+  }
+  .resend-res-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .resend-res-actions button {
+    padding: 3px 8px;
+    font-size: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
 </style>
 </head>
 <body>
@@ -551,6 +759,12 @@
               <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
             </svg>
             <span>url</span>
+          </button>
+          <button id="detailEditResend" title="Edit payload and resend request">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            <span>Re-send</span>
           </button>
         </div>
         <button id="detailClose" title="Close">✕</button>
@@ -615,9 +829,109 @@
     <div class="step-modal-card">
       <div class="step-modal-header">
         <span id="stepModalTitle"></span>
-        <button id="stepModalClose" title="Close">✕</button>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <button id="stepModalEditResend" title="Edit payload and resend this step">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            <span>Re-send</span>
+          </button>
+          <button id="stepModalClose" title="Close">✕</button>
+        </div>
       </div>
       <div id="stepModalBody" class="step-modal-body"></div>
+    </div>
+  </div>
+
+  <div id="resendModal" hidden>
+    <div class="resend-modal-card">
+      <div class="resend-modal-header">
+        <div class="resend-modal-title">
+          <span class="resend-title-badge">Re-send</span>
+          <span id="resendModalTitle">Edit &amp; Resend Request</span>
+          <span id="resendModalSub"></span>
+        </div>
+        <button id="resendModalClose" title="Close">✕</button>
+      </div>
+      <div class="resend-modal-body">
+        <div class="resend-endpoint-row">
+          <select id="resendMethod" class="resend-select">
+            <option value="GET">GET</option>
+            <option value="POST">POST</option>
+            <option value="PUT">PUT</option>
+            <option value="PATCH">PATCH</option>
+            <option value="DELETE">DELETE</option>
+            <option value="HEAD">HEAD</option>
+            <option value="OPTIONS">OPTIONS</option>
+          </select>
+          <input type="text" id="resendUrl" class="resend-input" placeholder="https://api.example.com/..." spellcheck="false">
+        </div>
+
+        <div class="resend-tabs-bar">
+          <div class="resend-tabs">
+            <button type="button" class="resend-tab active" data-tab="payload">Payload</button>
+            <button type="button" class="resend-tab" data-tab="headers">Headers</button>
+          </div>
+          <div class="resend-tab-actions">
+            <button type="button" id="resendFormatJson" title="Beautify valid JSON">Format JSON</button>
+            <button type="button" id="resendClearPayload" title="Clear payload">Clear</button>
+          </div>
+        </div>
+
+        <div id="resendTabPayload" class="resend-tab-content">
+          <textarea id="resendPayload" class="resend-textarea" placeholder="Request body / JSON payload..." spellcheck="false"></textarea>
+        </div>
+
+        <div id="resendTabHeaders" class="resend-tab-content" hidden>
+          <textarea id="resendHeaders" class="resend-textarea" placeholder="Header-Name: Value (one per line)..." spellcheck="false"></textarea>
+        </div>
+
+        <div class="resend-actions-row">
+          <div class="resend-mode-wrap">
+            <label for="resendMode">Send via:</label>
+            <select id="resendMode" class="resend-select-sm">
+              <option value="page">Page Context (Cookies &amp; Session)</option>
+              <option value="extension">Direct Extension (Bypass CORS)</option>
+            </select>
+          </div>
+          <div class="resend-btns">
+            <button type="button" id="resendCancelBtn">Cancel</button>
+            <button type="button" id="resendSendBtn" class="primary icon-btn">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+              <span id="resendSendLabel">Send</span>
+            </button>
+          </div>
+        </div>
+
+        <div id="resendResponseArea" hidden>
+          <div class="resend-res-header">
+            <div class="resend-res-meta">
+              <span class="hd-label">Response</span>
+              <span id="resendResStatus" class="col-status"></span>
+              <span id="resendResTime" class="resend-res-time"></span>
+            </div>
+            <div class="resend-res-actions">
+              <button type="button" id="resendCopyResponse" title="Copy response text">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                </svg>
+                <span>Copy</span>
+              </button>
+              <button type="button" id="resendCaptureStep" class="primary" title="Add this response as a captured step">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                <span>Capture as Step</span>
+              </button>
+            </div>
+          </div>
+          <div id="resendResponseBody" class="step-modal-scroll"></div>
+        </div>
+      </div>
     </div>
   </div>
   <script src="panel.js"></script>

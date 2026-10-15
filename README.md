@@ -43,6 +43,11 @@ like at that step, side by side.
 - **Binary-safe** — file uploads and other binary bodies are detected (by
   non-printable character ratio) and replaced with a short placeholder
   instead of dumping unreadable bytes.
+- **Edit & Resend (Replay)** — edit the HTTP method, URL, headers, and request
+  body / JSON payload directly from the detail panel or step modal. Re-execute
+  the request within the page context (preserving cookies and session) or via
+  direct extension fetch (bypassing CORS), inspect the live response and timing,
+  and capture the result straight into your export steps.
 - **Export** — a single Export ▾ menu: pick curl-style or plain url/status
   format, each as Markdown or a standalone HTML file (the HTML export
   includes working copy buttons; most Markdown viewers strip embedded

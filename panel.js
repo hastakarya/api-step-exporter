@@ -289,6 +289,7 @@ const detailClose = document.getElementById('detailClose');
 const detailResizer = document.getElementById('detailResizer');
 const detailCopyCurl = document.getElementById('detailCopyCurl');
 const detailCopyUrl = document.getElementById('detailCopyUrl');
+const detailEditResend = document.getElementById('detailEditResend');
 
 let currentDetailEntry = null;
 let currentDetailResponseRaw = null;
@@ -366,6 +367,9 @@ detailCopyCurl.addEventListener('click', () => {
 });
 detailCopyUrl.addEventListener('click', () => {
   if (currentDetailEntry) copyToClipboard(buildUrlCombined(currentDetailEntry, currentDetailResponseRaw), detailCopyUrl);
+});
+detailEditResend.addEventListener('click', () => {
+  if (currentDetailEntry) openResendFromEntry(currentDetailEntry);
 });
 
 function openDetail(entry) {
@@ -688,9 +692,15 @@ const stepModal = document.getElementById('stepModal');
 const stepModalTitle = document.getElementById('stepModalTitle');
 const stepModalBody = document.getElementById('stepModalBody');
 const stepModalClose = document.getElementById('stepModalClose');
+const stepModalEditResend = document.getElementById('stepModalEditResend');
+
+let currentStepModalStep = null;
 
 stepModalClose.addEventListener('click', () => {
   stepModal.hidden = true;
+});
+stepModalEditResend.addEventListener('click', () => {
+  if (currentStepModalStep) openResendFromStep(currentStepModalStep);
 });
 stepModal.addEventListener('click', (e) => {
   if (e.target === stepModal) stepModal.hidden = true;
@@ -713,6 +723,7 @@ function rawPayloadFromStep(step) {
 }
 
 function openStepModal(step) {
+  currentStepModalStep = step;
   stepModal.hidden = false;
   stepModalTitle.innerHTML =
     '<span class="method ' + methodClass(step.method) + '">' + step.method + '</span> ' +
@@ -945,3 +956,386 @@ function exportHtml(format) {
     COPY_STYLE + '\n</style>\n</head>\n<body>\n' + body + '\n<script>\n' + COPY_JS + '\n</' + 'script>\n</body>\n</html>\n';
   downloadFile(html, 'text/html', exportFilename('html'));
 }
+
+// -------------------------------------------------------------------------
+// Edit & Resend (Replay) Feature
+// -------------------------------------------------------------------------
+
+const resendModal = document.getElementById('resendModal');
+const resendModalClose = document.getElementById('resendModalClose');
+const resendModalSub = document.getElementById('resendModalSub');
+const resendMethodEl = document.getElementById('resendMethod');
+const resendUrlEl = document.getElementById('resendUrl');
+const resendPayloadEl = document.getElementById('resendPayload');
+const resendHeadersEl = document.getElementById('resendHeaders');
+const resendModeEl = document.getElementById('resendMode');
+const resendCancelBtn = document.getElementById('resendCancelBtn');
+const resendSendBtn = document.getElementById('resendSendBtn');
+const resendSendLabel = document.getElementById('resendSendLabel');
+const resendFormatJsonBtn = document.getElementById('resendFormatJson');
+const resendClearPayloadBtn = document.getElementById('resendClearPayload');
+const resendResponseArea = document.getElementById('resendResponseArea');
+const resendResStatus = document.getElementById('resendResStatus');
+const resendResTime = document.getElementById('resendResTime');
+const resendResponseBody = document.getElementById('resendResponseBody');
+const resendCopyResponseBtn = document.getElementById('resendCopyResponse');
+const resendCaptureStepBtn = document.getElementById('resendCaptureStep');
+const resendTabs = document.querySelectorAll('.resend-tab');
+const resendTabPayload = document.getElementById('resendTabPayload');
+const resendTabHeaders = document.getElementById('resendTabHeaders');
+
+let lastResendResult = null;
+
+const FORBIDDEN_FETCH_HEADERS = [
+  'accept-encoding',
+  'content-length',
+  'host',
+  'connection',
+  'keep-alive',
+  'transfer-encoding',
+  'te',
+  'upgrade',
+  'cookie',
+  'cookie2'
+];
+
+function formatHeadersForEdit(headers) {
+  if (!headers || !headers.length) return '';
+  return headers
+    .filter((h) => {
+      const n = (h.name || '').toLowerCase();
+      return n.charAt(0) !== ':' && FORBIDDEN_FETCH_HEADERS.indexOf(n) === -1;
+    })
+    .map((h) => h.name + ': ' + h.value)
+    .join('\n');
+}
+
+function parseHeadersText(text) {
+  const headers = {};
+  if (!text) return headers;
+  text.split('\n').forEach((line) => {
+    const colonIdx = line.indexOf(':');
+    if (colonIdx > 0) {
+      const name = line.slice(0, colonIdx).trim();
+      const value = line.slice(colonIdx + 1).trim();
+      if (name && name.charAt(0) !== ':' && FORBIDDEN_FETCH_HEADERS.indexOf(name.toLowerCase()) === -1) {
+        headers[name] = value;
+      }
+    }
+  });
+  return headers;
+}
+
+function formatJsonText(text) {
+  if (!text) return '';
+  try {
+    return JSON.stringify(JSON.parse(text), null, 2);
+  } catch (e) {
+    return text;
+  }
+}
+
+function switchResendTab(tabName) {
+  resendTabs.forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.tab === tabName);
+  });
+  resendTabPayload.hidden = (tabName !== 'payload');
+  resendTabHeaders.hidden = (tabName !== 'headers');
+  resendFormatJsonBtn.hidden = (tabName !== 'payload');
+  resendClearPayloadBtn.hidden = (tabName !== 'payload');
+}
+
+resendTabs.forEach((btn) => {
+  btn.addEventListener('click', () => switchResendTab(btn.dataset.tab));
+});
+
+resendFormatJsonBtn.addEventListener('click', () => {
+  resendPayloadEl.value = formatJsonText(resendPayloadEl.value);
+});
+
+resendClearPayloadBtn.addEventListener('click', () => {
+  resendPayloadEl.value = '';
+});
+
+function openResendModal(options) {
+  const method = (options.method || 'POST').toUpperCase();
+  resendMethodEl.value = method;
+  resendUrlEl.value = options.url || '';
+  resendPayloadEl.value = formatJsonText(options.payload || '');
+  resendHeadersEl.value = formatHeadersForEdit(options.headers || []);
+  resendModalSub.textContent = '— ' + shortName(options.url || '');
+
+  switchResendTab('payload');
+  resendResponseArea.hidden = true;
+  resendResponseBody.innerHTML = '';
+  resendResStatus.textContent = '';
+  resendResTime.textContent = '';
+  lastResendResult = null;
+
+  resendModal.hidden = false;
+  if (['POST', 'PUT', 'PATCH'].indexOf(method) !== -1) {
+    resendPayloadEl.focus();
+  } else {
+    resendUrlEl.focus();
+  }
+}
+
+function openResendFromEntry(entry) {
+  if (!entry) return;
+  openResendModal({
+    url: entry.request.url,
+    method: entry.request.method,
+    headers: entry.request.headers || [],
+    payload: rawPayloadFromEntry(entry)
+  });
+}
+
+function openResendFromStep(step) {
+  if (!step) return;
+  openResendModal({
+    url: step.url,
+    method: step.method,
+    headers: step.requestHeaders || [],
+    payload: rawPayloadFromStep(step)
+  });
+}
+
+resendModalClose.addEventListener('click', () => {
+  resendModal.hidden = true;
+});
+
+resendCancelBtn.addEventListener('click', () => {
+  resendModal.hidden = true;
+});
+
+resendModal.addEventListener('click', (e) => {
+  if (e.target === resendModal) resendModal.hidden = true;
+});
+
+resendResponseBody.addEventListener('click', (e) => {
+  const toggle = e.target.closest('.json-toggle');
+  if (!toggle) return;
+  toggle.parentElement.classList.toggle('collapsed');
+});
+
+function executePageFetch(url, method, headersObj, body) {
+  return new Promise((resolve, reject) => {
+    const key = '__ase_res_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    const hasBody = method !== 'GET' && method !== 'HEAD' && body !== undefined && body !== null && body !== '';
+
+    if (hasBody) {
+      const hasContentType = Object.keys(headersObj).some((k) => k.toLowerCase() === 'content-type');
+      if (!hasContentType) {
+        try {
+          JSON.parse(body);
+          headersObj['Content-Type'] = 'application/json';
+        } catch (_) {}
+      }
+    }
+
+    const code =
+      '(function() {\n' +
+      '  try {\n' +
+      '    window[' + JSON.stringify(key) + '] = null;\n' +
+      '    var opts = {\n' +
+      '      method: ' + JSON.stringify(method) + ',\n' +
+      '      headers: ' + JSON.stringify(headersObj) + ',\n' +
+      '      credentials: "include"\n' +
+      '    };\n' +
+      (hasBody ? '    opts.body = ' + JSON.stringify(body) + ';\n' : '') +
+      '    fetch(' + JSON.stringify(url) + ', opts)\n' +
+      '      .then(function(res) {\n' +
+      '        var h = [];\n' +
+      '        res.headers.forEach(function(v, k) { h.push({ name: k, value: v }); });\n' +
+      '        return res.text().then(function(txt) {\n' +
+      '          window[' + JSON.stringify(key) + '] = {\n' +
+      '            ok: true,\n' +
+      '            status: res.status,\n' +
+      '            statusText: res.statusText || "",\n' +
+      '            headers: h,\n' +
+      '            body: txt\n' +
+      '          };\n' +
+      '        });\n' +
+      '      })\n' +
+      '      .catch(function(err) {\n' +
+      '        window[' + JSON.stringify(key) + '] = { ok: false, error: err.message || String(err) };\n' +
+      '      });\n' +
+      '  } catch (syncErr) {\n' +
+      '    window[' + JSON.stringify(key) + '] = { ok: false, error: syncErr.message || String(syncErr) };\n' +
+      '  }\n' +
+      '})()';
+
+    chrome.devtools.inspectedWindow.eval(code, (initRes, exception) => {
+      if (exception) {
+        return reject(new Error(exception.value || exception.description || 'Page eval failed'));
+      }
+      const startTime = Date.now();
+      const interval = setInterval(() => {
+        chrome.devtools.inspectedWindow.eval('window[' + JSON.stringify(key) + ']', (res, pollErr) => {
+          if (pollErr) {
+            clearInterval(interval);
+            return reject(new Error(pollErr.value || pollErr.description || 'Poll failed'));
+          }
+          if (res) {
+            clearInterval(interval);
+            chrome.devtools.inspectedWindow.eval('delete window[' + JSON.stringify(key) + ']');
+            if (!res.ok) {
+              return reject(new Error(res.error || 'Fetch failed in page context'));
+            }
+            resolve(res);
+          } else if (Date.now() - startTime > 30000) {
+            clearInterval(interval);
+            chrome.devtools.inspectedWindow.eval('delete window[' + JSON.stringify(key) + ']');
+            reject(new Error('Request timed out after 30s'));
+          }
+        });
+      }, 100);
+    });
+  });
+}
+
+function executeExtensionFetch(url, method, headersObj, body) {
+  const hasBody = method !== 'GET' && method !== 'HEAD' && body !== undefined && body !== null && body !== '';
+  if (hasBody) {
+    const hasContentType = Object.keys(headersObj).some((k) => k.toLowerCase() === 'content-type');
+    if (!hasContentType) {
+      try {
+        JSON.parse(body);
+        headersObj['Content-Type'] = 'application/json';
+      } catch (_) {}
+    }
+  }
+  const opts = {
+    method: method,
+    headers: headersObj
+  };
+  if (hasBody) {
+    opts.body = body;
+  }
+  return fetch(url, opts).then((res) => {
+    const h = [];
+    res.headers.forEach((v, k) => h.push({ name: k, value: v }));
+    return res.text().then((txt) => ({
+      ok: true,
+      status: res.status,
+      statusText: res.statusText || '',
+      headers: h,
+      body: txt
+    }));
+  });
+}
+
+function sendResendRequest() {
+  const method = resendMethodEl.value;
+  const url = resendUrlEl.value.trim();
+  if (!url) {
+    alert('Please enter a valid URL');
+    return;
+  }
+  const body = resendPayloadEl.value;
+  const headersObj = parseHeadersText(resendHeadersEl.value);
+  const mode = resendModeEl.value;
+
+  resendSendBtn.disabled = true;
+  resendSendLabel.textContent = 'Sending…';
+  resendResponseArea.hidden = false;
+  resendResStatus.textContent = 'Sending…';
+  resendResStatus.className = 'col-status';
+  resendResTime.textContent = '';
+  resendResponseBody.innerHTML = '<div class="hd-loading">Sending request…</div>';
+
+  const t0 = performance.now();
+
+  let promise;
+  if (mode === 'page') {
+    promise = executePageFetch(url, method, headersObj, body).catch((pageErr) => {
+      console.warn('Page context fetch failed, attempting extension fetch fallback:', pageErr);
+      return executeExtensionFetch(url, method, headersObj, body).then((res) => {
+        res.fallback = true;
+        return res;
+      });
+    });
+  } else {
+    promise = executeExtensionFetch(url, method, headersObj, body);
+  }
+
+  promise
+    .then((result) => {
+      resendSendBtn.disabled = false;
+      resendSendLabel.textContent = 'Send';
+      const duration = Math.round(performance.now() - t0);
+
+      const statusText = result.status + (result.statusText ? ' ' + result.statusText : '');
+      resendResStatus.textContent = statusText;
+      resendResStatus.className = 'col-status ' + (result.status >= 400 ? 'status-err' : 'status-ok');
+      resendResTime.textContent = duration + ' ms' + (result.fallback ? ' (via extension fallback)' : '');
+
+      resendResponseBody.innerHTML = renderBodyBlock(sanitizeBody(result.body));
+
+      const headersList = Object.keys(headersObj).map((k) => ({ name: k, value: headersObj[k] }));
+      let qs = [];
+      try {
+        const u = new URL(url);
+        u.searchParams.forEach((v, k) => qs.push({ name: k, value: v }));
+      } catch (_) {}
+
+      lastResendResult = {
+        method: method,
+        url: url,
+        status: result.status,
+        statusText: result.statusText || '',
+        headersList: headersList,
+        queryString: qs,
+        body: (method !== 'GET' && method !== 'HEAD' && body) ? body : null,
+        responseBody: result.body
+      };
+    })
+    .catch((err) => {
+      resendSendBtn.disabled = false;
+      resendSendLabel.textContent = 'Send';
+      const duration = Math.round(performance.now() - t0);
+
+      resendResStatus.textContent = 'Error';
+      resendResStatus.className = 'col-status status-err';
+      resendResTime.textContent = duration + ' ms';
+      resendResponseBody.innerHTML = '<pre style="color:var(--error);">' + escapeHtml(err.message || String(err)) + '</pre>';
+      lastResendResult = null;
+    });
+}
+
+resendSendBtn.addEventListener('click', sendResendRequest);
+
+resendCopyResponseBtn.addEventListener('click', () => {
+  if (lastResendResult && lastResendResult.responseBody !== undefined) {
+    copyToClipboard(formatForClipboard(lastResendResult.responseBody), resendCopyResponseBtn);
+  }
+});
+
+resendCaptureStepBtn.addEventListener('click', () => {
+  if (!lastResendResult) return;
+  const btn = resendCaptureStepBtn;
+  const oldText = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = 'Capturing…';
+
+  captureScreenshotCompat().then((shot) => {
+    steps.push({
+      method: lastResendResult.method,
+      url: lastResendResult.url,
+      status: lastResendResult.status,
+      statusText: lastResendResult.statusText,
+      requestHeaders: lastResendResult.headersList,
+      queryString: lastResendResult.queryString,
+      postData: lastResendResult.body ? sanitizeBody(lastResendResult.body) : null,
+      responseBody: sanitizeBody(lastResendResult.responseBody || ''),
+      screenshot: shot || null,
+    });
+    renderSteps();
+    btn.textContent = 'Captured!';
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.innerHTML = oldText;
+    }, 1200);
+  });
+});
+
